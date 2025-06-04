@@ -4,91 +4,74 @@ Date: Tue, 18 Jul 2023 15:51:29 +0800
 Subject: [PATCH 1/10] Enhanced: advanced RPC protocol obfuscation
 
 ---
- lib/base/rpc.vala | 45 +++++++++++++++++++++++++++++++++++++++------
- 1 file changed, 39 insertions(+), 6 deletions(-)
+ lib/base/rpc.vala | 47 ++++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 42 insertions(+), 5 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
 index 8990b70e..d5acfebd 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -11,13 +11,46 @@ namespace Frida {
- 			Object (peer: peer);
- 		}
- 
--		public string getRpcStr(bool quote){
--			string result = (string) GLib.Base64.decode((string) GLib.Base64.decode("Wm5KcFpHRTZjbkJq"));
--			if(quote){
--				return "\"" + result + "\"";
--			}else{
--				return result;
-+		private static string obfuscated_protocol_id = null;
-+		private static uint8 xor_key = 0;
+@@ -1,3 +1,36 @@
++// Enhanced: Dynamic RPC protocol string generator
++namespace FridaEnhanced {
++	public class ProtocolObfuscator {
++		private static string? obfuscated_protocol = null;
 +
-+		private string get_rpc_protocol_id(bool quote) {
-+			if (obfuscated_protocol_id == null) {
-+				// Enhanced: Generate dynamic protocol ID with XOR obfuscation
++		public static string get_dynamic_protocol() {
++			if (obfuscated_protocol == null) {
 +				var now = new DateTime.now_local();
 +				var seed = (uint32)(now.to_unix() & 0xFFFFFFFF);
 +				Random.set_seed(seed ^ (uint32)Posix.getpid());
 +				
-+				// Generate XOR key
-+				xor_key = (uint8)(Random.int_range(1, 256));
-+				
-+				// Create base string with timestamp component
 +				var base_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-+				var protocol_parts = new string[3];
++				var prefixes = new string[] { "sys", "net", "core", "lib", "api", "rpc", "msg" };
++				var suffixes = new string[] { "proto", "chan", "pipe", "comm", "link", "bridge" };
 +				
-+				// Part 1: Random prefix (3-5 chars)
-+				var prefix_len = Random.int_range(3, 6);
-+				var prefix = new StringBuilder();
-+				for (int i = 0; i < prefix_len; i++) {
-+					prefix.append_c(base_chars[Random.int_range(0, base_chars.length)]);
-+				}
-+				protocol_parts[0] = prefix.str;
++				var prefix = prefixes[Random.int_range(0, prefixes.length)];
++				var suffix = suffixes[Random.int_range(0, suffixes.length)];
++				var random_mid = "%04x".printf((uint16)(seed & 0xFFFF));
 +				
-+				// Part 2: Encoded timestamp component
-+				var time_component = "%04x".printf((uint16)(seed & 0xFFFF));
-+				protocol_parts[1] = time_component;
-+				
-+				// Part 3: Random suffix (2-4 chars)
-+				var suffix_len = Random.int_range(2, 5);
-+				var suffix = new StringBuilder();
-+				for (int i = 0; i < suffix_len; i++) {
-+					suffix.append_c(base_chars[Random.int_range(0, base_chars.length)]);
-+				}
-+				protocol_parts[2] = suffix.str;
-+				
-+				obfuscated_protocol_id = string.joinv(":", protocol_parts);
- 			}
-+			
-+			return quote ? "\"%s\"".printf(obfuscated_protocol_id) : obfuscated_protocol_id;
- 		}
- 
- 		public async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
-@@ -26,7 +59,7 @@ namespace Frida {
++				obfuscated_protocol = "%s:%s%s".printf(prefix, suffix, random_mid);
++			}
++			return obfuscated_protocol;
++		}
++		
++		public static string get_quoted_protocol() {
++			return "\"%s\"".printf(get_dynamic_protocol());
++		}
++	}
++}
++
++// Include the enhanced obfuscator
++using FridaEnhanced;
++
+ namespace Frida {
+ 	public sealed class RpcClient : Object {
+ 		public weak RpcPeer peer {
+@@ -17,7 +50,7 @@ namespace Frida {
  			var request = new Json.Builder ();
  			request
  				.begin_array ()
--				.add_string_value (getRpcStr(false))
-+				.add_string_value (get_rpc_protocol_id(false))
+-				.add_string_value ("frida:rpc")
++				.add_string_value (ProtocolObfuscator.get_dynamic_protocol())
  				.add_string_value (request_id)
  				.add_string_value ("call")
  				.add_string_value (method)
-@@ -79,7 +112,7 @@ namespace Frida {
+@@ -65,7 +98,7 @@ namespace Frida {
  		}
  
  		public bool try_handle_message (string json) {
--			if (json.index_of (getRpcStr(true)) == -1)
-+			if (json.index_of (get_rpc_protocol_id(true)) == -1)
+-			if (json.index_of ("\"frida:rpc\"") == -1)
++			if (json.index_of (ProtocolObfuscator.get_quoted_protocol()) == -1)
  				return false;
  
  			var parser = new Json.Parser ();
-@@ -108,7 +141,7 @@ namespace Frida {
+@@ -94,7 +127,7 @@ namespace Frida {
  				return false;
  
  			string? type = rpc_message.get_element (0).get_string ();
--			if (type == null || type != getRpcStr(false))
-+			if (type == null || type != get_rpc_protocol_id(false))
+-			if (type == null || type != "frida:rpc")
++			if (type == null || type != ProtocolObfuscator.get_dynamic_protocol())
  				return false;
  
  			var request_id_value = rpc_message.get_element (1);

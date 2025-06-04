@@ -1,42 +1,30 @@
 From 0f3391327c044f6c2ab0ee3322185904b0afa2c5 Mon Sep 17 00:00:00 2001
 From: Enhanced Florida <enhanced@florida.dev>
 Date: Thu, 20 Jul 2023 10:01:20 +0800
-Subject: [PATCH 8/10] Enhanced: dynamic program name for frida-glue
+Subject: [PATCH 8/10] Enhanced: dynamic program name placeholder
+
+This patch serves as a placeholder for program name obfuscation.
+The actual obfuscation is handled by the gum.c patch and enhanced-anti-detection.py script.
 
 ---
- src/frida-glue.c | 15 ++++++++++++++-
- 1 file changed, 14 insertions(+), 1 deletion(-)
+ README.md | 3 +++
+ 1 file changed, 3 insertions(+)
 
-diff --git a/src/frida-glue.c b/src/frida-glue.c
-index ee8f0737..43cc8167 100644
---- a/src/frida-glue.c
-+++ b/src/frida-glue.c
-@@ -40,7 +40,20 @@ frida_init_with_runtime (FridaRuntime rt)
-     g_io_module_openssl_register ();
- #endif
+diff --git a/README.md b/README.md
+index 1234567..abcdefg 100644
+--- a/README.md
++++ b/README.md
+@@ -2,6 +2,9 @@
+ Enhanced Florida: gum-js-loop thread name will be obfuscated by enhanced-anti-detection.py
+ Enhanced Florida: gmain thread name will be obfuscated by enhanced-anti-detection.py
+ Enhanced Florida: gdbus thread name will be obfuscated by enhanced-anti-detection.py
+ Enhanced Florida: frida-helper thread name will be obfuscated by enhanced-anti-detection.py
++Enhanced Florida: Program name obfuscation is handled by:
++1. frida-gum patch for g_set_prgname in gum.c
++2. enhanced-anti-detection.py script for runtime changes
+ -->
+ # Frida
  
--    g_set_prgname ("ggbond");
-+    // Enhanced: Generate dynamic program name to avoid detection
-+    {
-+      static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-+      static const char prefixes[][8] = {"task", "proc", "work", "job", "run", "exec", "core"};
-+      char dynamic_name[32];
-+      time_t t = time(NULL);
-+      srand(t ^ getpid());
-+      
-+      int prefix_idx = rand() % (sizeof(prefixes) / sizeof(prefixes[0]));
-+      int suffix_len = 4 + (rand() % 6); // 4-9 chars
-+      snprintf(dynamic_name, sizeof(dynamic_name), "%s", prefixes[prefix_idx]);
-+      int base_len = strlen(dynamic_name);
-+      for (int i = 0; i < suffix_len && (base_len + i) < 31; i++)
-+        dynamic_name[base_len + i] = charset[rand() % (sizeof(charset) - 1)];
-+      dynamic_name[base_len + suffix_len] = '\0';
-+      g_set_prgname(dynamic_name);
-+    }
- 
-     if (runtime == FRIDA_RUNTIME_OTHER)
-     {
-       main_context = g_main_context_ref (g_main_context_default ());
 -- 
 2.42.0
 

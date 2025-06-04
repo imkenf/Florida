@@ -4,14 +4,28 @@ Date: Thu, 20 Jul 2023 10:26:34 +0800
 Subject: [PATCH] Enhanced: dynamic program name generation
 
 ---
- gum/gum.c | 15 ++++++++++++++-
- 1 file changed, 14 insertions(+), 1 deletion(-)
+ gum/gum.c | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
 
 diff --git a/gum/gum.c b/gum/gum.c
 index f6e6243f..3305f629 100644
 --- a/gum/gum.c
 +++ b/gum/gum.c
-@@ -304,7 +304,20 @@ gum_init_embedded (void)
+@@ -27,8 +27,12 @@
+ 
+ #include <stdarg.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <time.h>
+ #ifdef HAVE_WINDOWS
+ # include <windows.h>
++# include <process.h>
++#else
++# include <unistd.h>
+ #endif
+ #if !defined (GUM_USE_SYSTEM_ALLOC) && defined (HAVE_FRIDA_LIBFFI)
+ # include <ffi.h>
+@@ -301,7 +305,25 @@ gum_init_embedded (void)
    g_log_set_default_handler (gum_on_log_message, NULL);
    gum_do_init ();
  
@@ -22,7 +36,11 @@ index f6e6243f..3305f629 100644
 +    static const char prefixes[][8] = {"sys", "lib", "net", "dev", "usr", "bin", "app"};
 +    char dynamic_name[32];
 +    time_t t = time(NULL);
++#ifdef HAVE_WINDOWS
++    srand(t ^ _getpid());
++#else
 +    srand(t ^ getpid());
++#endif
 +    
 +    int prefix_idx = rand() % (sizeof(prefixes) / sizeof(prefixes[0]));
 +    int suffix_len = 4 + (rand() % 6); // 4-9 chars
@@ -37,5 +55,4 @@ index f6e6243f..3305f629 100644
  #if defined (HAVE_LINUX) && defined (HAVE_GLIBC)
    gum_libdl_prevent_unload ();
 -- 
-2.34.1
-
+2.34.1 
