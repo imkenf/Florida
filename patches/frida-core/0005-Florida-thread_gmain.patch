@@ -1,0 +1,28 @@
+From 123abc456def789ghi012jkl345mno678pqr901stu Mon Sep 17 00:00:00 2001
+From: Enhanced Florida <enhanced@florida.dev>
+Date: Tue, 18 Jul 2023 16:04:30 +0800
+Subject: [PATCH 5/10] Enhanced: thread gmain placeholder
+
+This patch serves as a placeholder for gmain thread name obfuscation.
+The actual obfuscation is handled by the enhanced-anti-detection.py script.
+
+---
+ README.md | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/README.md b/README.md
+index abcdefg..1234567 100644
+--- a/README.md
++++ b/README.md
+@@ -1,5 +1,8 @@
+ <!--
+ Enhanced Florida: gum-js-loop thread name will be obfuscated by enhanced-anti-detection.py
++Enhanced Florida: gmain thread name will be obfuscated by enhanced-anti-detection.py
++Enhanced Florida: gdbus thread name will be obfuscated by enhanced-anti-detection.py
++Enhanced Florida: frida-helper thread name will be obfuscated by enhanced-anti-detection.py
+ -->
+ # Frida
+ 
+-- 
+2.42.0
+

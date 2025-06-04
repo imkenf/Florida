@@ -1,0 +1,56 @@
+From 98034685d895e07aa0cf079eb7f73189f12c6d66 Mon Sep 17 00:00:00 2001
+From: Enhanced Florida <enhanced@florida.dev>
+Date: Tue, 18 Jul 2023 15:57:19 +0800
+Subject: [PATCH 2/10] Enhanced: advanced agent filename obfuscation
+
+---
+ src/linux/linux-host-session.vala | 35 ++++++++++++++++++++++--------
+ 1 file changed, 26 insertions(+), 9 deletions(-)
+
+diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
+index 50470ac8..64245792 100644
+--- a/src/linux/linux-host-session.vala
++++ b/src/linux/linux-host-session.vala
+@@ -128,12 +128,29 @@ namespace Frida {
+ 			var blob64 = Frida.Data.Agent.get_frida_agent_64_so_blob ();
+ 			var emulated_arm = Frida.Data.Agent.get_frida_agent_arm_so_blob ();
+ 			var emulated_arm64 = Frida.Data.Agent.get_frida_agent_arm64_so_blob ();
+-			var random_prefix = GLib.Uuid.string_random();
+-			agent = new AgentDescriptor (PathTemplate (random_prefix + "-<arch>.so"),
++			
++			// Enhanced: Generate more realistic library names
++			string generate_realistic_lib_name() {
++				var lib_prefixes = new string[] {
++					"lib", "android", "system", "native", "core", "base", "util",
++					"media", "graphics", "ui", "net", "crypto", "ssl", "dbus"
++				};
++				var lib_suffixes = new string[] {
++					"core", "base", "util", "helper", "service", "client", "engine",
++					"manager", "handler", "worker", "bridge", "proxy", "cache"
++				};
++				
++				var now = new DateTime.now_local();
++				Random.set_seed((uint32)(now.to_unix() ^ Posix.getpid()));
++				
++				var prefix = lib_prefixes[Random.int_range(0, lib_prefixes.length)];
++				var suffix = lib_suffixes[Random.int_range(0, lib_suffixes.length)];
++				var version = Random.int_range(1, 99);
++				
++				return "%s%s%02d".printf(prefix, suffix, version);
++			}
++			
++			var realistic_name = generate_realistic_lib_name();
++			agent = new AgentDescriptor (PathTemplate (realistic_name + "-<arch>.so"),
+ 				new Bytes.static (blob32.data),
+ 				new Bytes.static (blob64.data),
+ 				new AgentResource[] {
+-					new AgentResource (random_prefix + "-arm.so", new Bytes.static (emulated_arm.data), tempdir),
+-					new AgentResource (random_prefix + "-arm64.so", new Bytes.static (emulated_arm64.data), tempdir),
++					new AgentResource (realistic_name + "-arm.so", new Bytes.static (emulated_arm.data), tempdir),
++					new AgentResource (realistic_name + "-arm64.so", new Bytes.static (emulated_arm64.data), tempdir),
+ 				},
+ 				AgentMode.INSTANCED,
+ 				tempdir);
+-- 
+2.42.0
+

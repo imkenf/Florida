@@ -1,0 +1,41 @@
+From 649c04e3fb19596621f347d05c45c8c30d1a0fa7 Mon Sep 17 00:00:00 2001
+From: Enhanced Florida <enhanced@florida.dev>
+Date: Thu, 20 Jul 2023 10:26:34 +0800
+Subject: [PATCH] Enhanced: dynamic program name generation
+
+---
+ gum/gum.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/gum/gum.c b/gum/gum.c
+index f6e6243f..3305f629 100644
+--- a/gum/gum.c
++++ b/gum/gum.c
+@@ -304,7 +304,20 @@ gum_init_embedded (void)
+   g_log_set_default_handler (gum_on_log_message, NULL);
+   gum_do_init ();
+ 
+-  g_set_prgname ("frida");
++  // Enhanced: Generate dynamic program name to avoid detection
++  {
++    static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
++    static const char prefixes[][8] = {"sys", "lib", "net", "dev", "usr", "bin", "app"};
++    char dynamic_name[32];
++    time_t t = time(NULL);
++    srand(t ^ getpid());
++    
++    int prefix_idx = rand() % (sizeof(prefixes) / sizeof(prefixes[0]));
++    int suffix_len = 4 + (rand() % 6); // 4-9 chars
++    snprintf(dynamic_name, sizeof(dynamic_name), "%s", prefixes[prefix_idx]);
++    int base_len = strlen(dynamic_name);
++    for (int i = 0; i < suffix_len && (base_len + i) < 31; i++)
++      dynamic_name[base_len + i] = charset[rand() % (sizeof(charset) - 1)];
++    dynamic_name[base_len + suffix_len] = '\0';
++    g_set_prgname(dynamic_name);
++  }
+ 
+ #if defined (HAVE_LINUX) && defined (HAVE_GLIBC)
+   gum_libdl_prevent_unload ();
+-- 
+2.34.1
+

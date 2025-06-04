@@ -1,0 +1,41 @@
+{
+  "enable_symbol_obfuscation": true,
+  "enable_string_obfuscation": true,
+  "enable_thread_name_obfuscation": true,
+  "enable_memory_layout_obfuscation": true,
+  "randomization_strength": "high",
+  "preserve_functionality": true,
+  "target_platforms": ["android", "linux"],
+  "advanced_features": {
+    "enable_anti_debugging": true,
+    "enable_code_flow_obfuscation": false,
+    "enable_dynamic_loading": true,
+    "enable_fake_sections": true
+  },
+  "naming_strategy": {
+    "use_system_like_names": true,
+    "min_name_length": 4,
+    "max_name_length": 16,
+    "preferred_prefixes": ["sys", "lib", "net", "io", "mem", "proc"],
+    "preferred_suffixes": ["util", "core", "base", "mgr", "svc", "mod"]
+  },
+  "thread_obfuscation": {
+    "obfuscate_gum_js_loop": true,
+    "obfuscate_gmain": true,
+    "obfuscate_gdbus": true,
+    "obfuscate_frida_helper": true,
+    "use_realistic_thread_names": true
+  },
+  "string_obfuscation": {
+    "obfuscate_frida_strings": true,
+    "obfuscate_gum_strings": true,
+    "obfuscate_protocol_strings": true,
+    "encryption_method": "xor",
+    "reverse_strings": true
+  },
+  "logging": {
+    "enable_verbose_logging": true,
+    "log_file": "obfuscation.log",
+    "color_output": true
+  }
+} 
