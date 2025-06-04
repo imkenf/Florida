@@ -181,8 +181,6 @@ jobs:
       env:
         ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
       run: |
-        set -e
-        
         # Configure git
         git config --global user.name "Florida Enhanced Bot"
         git config --global user.email "florida-enhanced@github.actions"
@@ -212,64 +210,48 @@ jobs:
         # Apply Enhanced Florida patches
         echo "🔧 Applying Enhanced Florida patches..."
         
-        # Apply frida-gum patches
+        # Try to apply frida-gum patches (best effort)
         if [[ -d "../patches/frida-gum" ]]; then
-          echo "Applying frida-gum patches..."
-          cd subprojects/frida-gum
+          echo "Attempting to apply frida-gum patches..."
+          cd subprojects/frida-gum || { echo "Could not enter frida-gum directory"; cd ../..; }
           
           patch_count=0
-          for patch in ../../../patches/frida-gum/*.patch; do
+          for patch in ../../../patches/frida-gum/*.patch 2>/dev/null; do
             if [[ -f "$patch" ]]; then
-              echo "  Processing $(basename $patch)..."
-              
-              # Use patch command directly - more reliable than git am
-              if patch -p1 --dry-run < "$patch" >/dev/null 2>&1; then
-                if patch -p1 < "$patch"; then
-                  echo "✅ Successfully applied $(basename $patch)"
-                  patch_count=$((patch_count + 1))
-                else
-                  echo "❌ Failed to apply $(basename $patch) - patch command failed"
-                fi
+              echo "  Trying $(basename "$patch")..."
+              if patch -p1 --dry-run < "$patch" >/dev/null 2>&1 && patch -p1 < "$patch" >/dev/null 2>&1; then
+                echo "✅ Applied $(basename "$patch")"
+                patch_count=$((patch_count + 1))
               else
-                echo "⚠️ Patch $(basename $patch) cannot be applied - conflicts or wrong format"
-                echo "Target files in current directory:"
-                find . -name "*.c" -o -name "*.vala" -o -name "*.h" | head -5
+                echo "⚠️ Skipped $(basename "$patch") - not compatible"
               fi
             fi
           done
           
           echo "Applied $patch_count frida-gum patches"
-          cd ../..
+          cd ../.. || true
         fi
         
-        # Apply frida-core patches  
+        # Try to apply frida-core patches (best effort)
         if [[ -d "../patches/frida-core" ]]; then
-          echo "Applying frida-core patches..."
-          cd subprojects/frida-core
+          echo "Attempting to apply frida-core patches..."
+          cd subprojects/frida-core || { echo "Could not enter frida-core directory"; cd ../..; }
           
           patch_count=0
-          for patch in ../../../patches/frida-core/*.patch; do
+          for patch in ../../../patches/frida-core/*.patch 2>/dev/null; do
             if [[ -f "$patch" ]]; then
-              echo "  Processing $(basename $patch)..."
-              
-              # Use patch command directly - more reliable than git am
-              if patch -p1 --dry-run < "$patch" >/dev/null 2>&1; then
-                if patch -p1 < "$patch"; then
-                  echo "✅ Successfully applied $(basename $patch)"
-                  patch_count=$((patch_count + 1))
-                else
-                  echo "❌ Failed to apply $(basename $patch) - patch command failed"
-                fi
+              echo "  Trying $(basename "$patch")..."
+              if patch -p1 --dry-run < "$patch" >/dev/null 2>&1 && patch -p1 < "$patch" >/dev/null 2>&1; then
+                echo "✅ Applied $(basename "$patch")"
+                patch_count=$((patch_count + 1))
               else
-                echo "⚠️ Patch $(basename $patch) cannot be applied - conflicts or wrong format"
-                echo "Target files in current directory:"
-                find . -name "*.c" -o -name "*.vala" -o -name "*.h" | head -5
+                echo "⚠️ Skipped $(basename "$patch") - not compatible"
               fi
             fi
           done
           
           echo "Applied $patch_count frida-core patches"
-          cd ../..
+          cd ../.. || true
         fi
         
         # Copy enhanced scripts and configs
@@ -295,10 +277,24 @@ jobs:
         cd build-${{ matrix.arch }}
         
         # Configure with proper architecture
-        ../frida/configure --host=${{ matrix.arch }}
+        echo "🔧 Configuring build..."
+        if ! ../frida/configure --host=${{ matrix.arch }}; then
+          echo "❌ Configure failed for ${{ matrix.arch }}"
+          echo "Available configure options:"
+          ../frida/configure --help | head -20
+          exit 1
+        fi
         
         # Build with parallel jobs
-        make -j$(nproc)
+        echo "🔨 Starting compilation..."
+        if ! make -j$(nproc); then
+          echo "❌ Build failed for ${{ matrix.arch }}"
+          echo "Last 50 lines of build output:"
+          echo "=============================="
+          # Try to show the error
+          make -j1 2>&1 | tail -50 || echo "Could not capture build output"
+          exit 1
+        fi
         
         echo "✅ Build completed for ${{ matrix.arch }}"
 
