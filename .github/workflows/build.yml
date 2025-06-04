@@ -100,17 +100,11 @@ jobs:
             # 🚀 Florida Enhanced for Frida ${{ needs.check_version.outputs.FRIDA_VERSION }}
             
             ## ✨ 增强特性
-            - 🔐 动态程序名生成 (时间戳+PID种子)
-            - 🌐 高级RPC协议混淆 (多层时间戳+分段)
-            - 📁 智能Agent文件名伪装 (仿真系统库)
-            - 🛡️ 内存布局混淆 (伪造节区+填充)
-            - 🎯 综合反检测脚本 (配置化支持)
-            
-            ## 📊 检测对抗提升
-            - 进程名检测: 60% → 95% (+35%)
-            - RPC流量分析: 65% → 88% (+23%)
-            - 内存扫描: 50% → 85% (+35%)
-            - 文件名检测: 70% → 90% (+20%)
+            - 动态程序名生成
+            - 高级RPC协议混淆
+            - 智能Agent文件名伪装
+            - 内存布局混淆
+            - 综合反检测脚本
             
             ## 📦 包含组件
             - frida-server (全架构)
@@ -209,49 +203,91 @@ jobs:
         
         # Apply Enhanced Florida patches
         echo "🔧 Applying Enhanced Florida patches..."
+        echo "📊 Patch Application Report:"
+        echo "============================="
+        
+        total_patches=0
+        applied_patches=0
+        skipped_patches=0
         
         # Try to apply frida-gum patches (best effort)
         if [[ -d "../patches/frida-gum" ]]; then
-          echo "Attempting to apply frida-gum patches..."
+          echo "\n📁 Processing frida-gum patches..."
           cd subprojects/frida-gum || { echo "Could not enter frida-gum directory"; cd ../..; }
           
-          patch_count=0
           for patch in ../../../patches/frida-gum/*.patch; do
             if [[ -f "$patch" ]]; then
-              echo "  Trying $(basename "$patch")..."
-              if patch -p1 --dry-run < "$patch" >/dev/null 2>&1 && patch -p1 < "$patch" >/dev/null 2>&1; then
-                echo "✅ Applied $(basename "$patch")"
-                patch_count=$((patch_count + 1))
+              total_patches=$((total_patches + 1))
+              patch_name=$(basename "$patch")
+              echo "\n  🔍 Testing: $patch_name"
+              
+              # Show patch metadata
+              echo "    📋 Target: $(grep '^+++' "$patch" | head -1 | sed 's/+++ b\///')"
+              echo "    📍 Lines: $(grep '^@@' "$patch" | head -1 | sed 's/@@ //')"
+              
+              # Test if patch applies
+              if patch -p1 --dry-run < "$patch" >/dev/null 2>&1; then
+                if patch -p1 < "$patch" >/dev/null 2>&1; then
+                  echo "    ✅ Status: APPLIED SUCCESSFULLY"
+                  applied_patches=$((applied_patches + 1))
+                else
+                  echo "    ❌ Status: DRY RUN OK BUT APPLY FAILED"
+                  skipped_patches=$((skipped_patches + 1))
+                fi
               else
-                echo "⚠️ Skipped $(basename "$patch") - not compatible"
+                echo "    ⚠️ Status: SKIPPED (not compatible with Frida 16.7.19)"
+                # Show brief reason
+                patch -p1 --dry-run < "$patch" 2>&1 | grep -E "(can't find|No such file|Hunk.*failed)" | head -2 | sed 's/^/      🔍 Reason: /'
+                skipped_patches=$((skipped_patches + 1))
               fi
             fi
-          done 2>/dev/null || true
+          done || true
           
-          echo "Applied $patch_count frida-gum patches"
-          cd ../.. || true
+          echo "\n  📈 frida-gum Summary: Applied $applied_patches, Skipped $skipped_patches"
+          cd ../..
         fi
         
         # Try to apply frida-core patches (best effort)
         if [[ -d "../patches/frida-core" ]]; then
-          echo "Attempting to apply frida-core patches..."
+          echo "\n📁 Processing frida-core patches..."
           cd subprojects/frida-core || { echo "Could not enter frida-core directory"; cd ../..; }
           
-          patch_count=0
+          core_applied=0
+          core_skipped=0
+          
           for patch in ../../../patches/frida-core/*.patch; do
             if [[ -f "$patch" ]]; then
-              echo "  Trying $(basename "$patch")..."
-              if patch -p1 --dry-run < "$patch" >/dev/null 2>&1 && patch -p1 < "$patch" >/dev/null 2>&1; then
-                echo "✅ Applied $(basename "$patch")"
-                patch_count=$((patch_count + 1))
+              total_patches=$((total_patches + 1))
+              patch_name=$(basename "$patch")
+              echo "\n  🔍 Testing: $patch_name"
+              
+              # Show patch metadata
+              echo "    📋 Target: $(grep '^+++' "$patch" | head -1 | sed 's/+++ b\///')"
+              echo "    📍 Lines: $(grep '^@@' "$patch" | head -1 | sed 's/@@ //')"
+              
+              # Test if patch applies
+              if patch -p1 --dry-run < "$patch" >/dev/null 2>&1; then
+                if patch -p1 < "$patch" >/dev/null 2>&1; then
+                  echo "    ✅ Status: APPLIED SUCCESSFULLY"
+                  applied_patches=$((applied_patches + 1))
+                  core_applied=$((core_applied + 1))
+                else
+                  echo "    ❌ Status: DRY RUN OK BUT APPLY FAILED"
+                  skipped_patches=$((skipped_patches + 1))
+                  core_skipped=$((core_skipped + 1))
+                fi
               else
-                echo "⚠️ Skipped $(basename "$patch") - not compatible"
+                echo "    ⚠️ Status: SKIPPED (not compatible with Frida 16.7.19)"
+                # Show brief reason
+                patch -p1 --dry-run < "$patch" 2>&1 | grep -E "(can't find|No such file|Hunk.*failed)" | head -2 | sed 's/^/      🔍 Reason: /'
+                skipped_patches=$((skipped_patches + 1))
+                core_skipped=$((core_skipped + 1))
               fi
             fi
-          done 2>/dev/null || true
+          done || true
           
-          echo "Applied $patch_count frida-core patches"
-          cd ../.. || true
+          echo "\n  📈 frida-core Summary: Applied $core_applied, Skipped $core_skipped"
+          cd ../..
         fi
         
         # Copy enhanced scripts and configs
@@ -269,6 +305,42 @@ jobs:
         
         echo "🎯 Patch application completed! Proceeding with build..."
         echo "Note: Some patches may have failed due to version differences, but enhanced features are still active."
+        
+        # Final patch application summary
+        echo ""
+        echo "🎯 FINAL PATCH SUMMARY FOR ${{ matrix.arch }}"
+        echo "==========================================="
+        echo "📊 Total patches processed: $total_patches"
+        echo "✅ Successfully applied: $applied_patches"
+        echo "⚠️ Skipped (incompatible): $skipped_patches"
+        echo ""
+        
+        if [[ $applied_patches -gt 0 ]]; then
+          success_rate=$((applied_patches * 100 / total_patches))
+          echo "📈 Success rate: ${success_rate}%"
+          echo ""
+          
+          if [[ $success_rate -ge 50 ]]; then
+            echo "🎉 Good compatibility with Frida 16.7.19!"
+          elif [[ $success_rate -ge 25 ]]; then
+            echo "⚠️ Moderate compatibility - enhanced features partially active"
+          else
+            echo "❌ Low compatibility - limited enhanced features"
+          fi
+        else
+          echo "❗ No patches applied - using standard Frida with enhanced scripts only"
+        fi
+        
+        echo ""
+        echo "🔧 Enhanced Features Status:"
+        echo "  ✅ Enhanced anti-detection script: Active"
+        echo "  ✅ Obfuscation configuration: Active"
+        if [[ $applied_patches -gt 0 ]]; then
+          echo "  ✅ Code-level patches: $applied_patches active"
+        else
+          echo "  ⚠️ Code-level patches: None (script-based enhancements only)"
+        fi
+        echo ""
         
         # Build
         echo "🔨 Building for ${{ matrix.arch }}..."
