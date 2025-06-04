@@ -4,8 +4,8 @@ Date: Tue, 18 Jul 2023 15:51:29 +0800
 Subject: [PATCH 1/10] Enhanced: advanced RPC protocol obfuscation
 
 ---
- lib/base/rpc.vala | 47 ++++++++++++++++++++++++++++++++++++++++++-----
- 1 file changed, 42 insertions(+), 5 deletions(-)
+ lib/base/rpc.vala | 45 +++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 40 insertions(+), 5 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
 index 8990b70e..d5acfebd 100644
@@ -42,9 +42,6 @@ index 8990b70e..d5acfebd 100644
 +	}
 +}
 +
-+// Include the enhanced obfuscator
-+using FridaEnhanced;
-+
  namespace Frida {
  	public sealed class RpcClient : Object {
  		public weak RpcPeer peer {
@@ -53,7 +50,7 @@ index 8990b70e..d5acfebd 100644
  			request
  				.begin_array ()
 -				.add_string_value ("frida:rpc")
-+				.add_string_value (ProtocolObfuscator.get_dynamic_protocol())
++				.add_string_value (FridaEnhanced.ProtocolObfuscator.get_dynamic_protocol())
  				.add_string_value (request_id)
  				.add_string_value ("call")
  				.add_string_value (method)
@@ -62,7 +59,7 @@ index 8990b70e..d5acfebd 100644
  
  		public bool try_handle_message (string json) {
 -			if (json.index_of ("\"frida:rpc\"") == -1)
-+			if (json.index_of (ProtocolObfuscator.get_quoted_protocol()) == -1)
++			if (json.index_of (FridaEnhanced.ProtocolObfuscator.get_quoted_protocol()) == -1)
  				return false;
  
  			var parser = new Json.Parser ();
@@ -71,7 +68,7 @@ index 8990b70e..d5acfebd 100644
  
  			string? type = rpc_message.get_element (0).get_string ();
 -			if (type == null || type != "frida:rpc")
-+			if (type == null || type != ProtocolObfuscator.get_dynamic_protocol())
++			if (type == null || type != FridaEnhanced.ProtocolObfuscator.get_dynamic_protocol())
  				return false;
  
  			var request_id_value = rpc_message.get_element (1);
