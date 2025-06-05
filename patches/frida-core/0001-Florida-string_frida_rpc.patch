@@ -1,37 +1,51 @@
 From 9ff24d5b1b81bf5a2fc8ff517bc0caba0e3288e9 Mon Sep 17 00:00:00 2001
 From: Enhanced Florida <enhanced@florida.dev>
 Date: Tue, 18 Jul 2023 15:51:29 +0800
-Subject: [PATCH 1/10] Enhanced: advanced RPC protocol obfuscation
+Subject: [PATCH 1/10] Enhanced: advanced RPC protocol obfuscation with client support
 
 ---
- lib/base/rpc.vala | 45 +++++++++++++++++++++++++++++++++++++++++-----
- 1 file changed, 40 insertions(+), 5 deletions(-)
+ lib/base/rpc.vala | 80 +++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 72 insertions(+), 8 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index 8990b70e..d5acfebd 100644
+index 8990b70e..f8d4c3e2 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -1,3 +1,36 @@
-+// Enhanced: Dynamic RPC protocol string generator
+@@ -1,3 +1,71 @@
++// Enhanced: Dynamic RPC protocol string generator with client support
 +namespace FridaEnhanced {
 +	public class ProtocolObfuscator {
 +		private static string? obfuscated_protocol = null;
++		private static bool protocol_info_saved = false;
 +
 +		public static string get_dynamic_protocol() {
 +			if (obfuscated_protocol == null) {
-+				var now = new DateTime.now_local();
-+				var seed = (uint32)(now.to_unix() & 0xFFFFFFFF);
-+				Random.set_seed(seed ^ (uint32)Posix.getpid());
++				// Check for environment variable to enable obfuscation
++				string? enable_obfuscation = Environment.get_variable("FLORIDA_ENABLE_PROTOCOL_OBFUSCATION");
++				string? enable_advanced = Environment.get_variable("FLORIDA_ENABLE_ADVANCED_MODE");
 +				
-+				var base_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-+				var prefixes = new string[] { "sys", "net", "core", "lib", "api", "rpc", "msg" };
-+				var suffixes = new string[] { "proto", "chan", "pipe", "comm", "link", "bridge" };
++				if (enable_obfuscation == "1" || enable_advanced == "1") {
++					var now = new DateTime.now_local();
++					var seed = (uint32)(now.to_unix() & 0xFFFFFFFF);
++					Random.set_seed(seed ^ (uint32)Posix.getpid());
++					
++					var base_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
++					var prefixes = new string[] { "sys", "net", "core", "lib", "api", "rpc", "msg" };
++					var suffixes = new string[] { "proto", "chan", "pipe", "comm", "link", "bridge" };
++					
++					var prefix = prefixes[Random.int_range(0, prefixes.length)];
++					var suffix = suffixes[Random.int_range(0, suffixes.length)];
++					var random_mid = "%04x".printf((uint16)(seed & 0xFFFF));
++					
++					obfuscated_protocol = "%s:%s%s".printf(prefix, suffix, random_mid);
++					stderr.printf("[Florida-Enhanced] Advanced mode: Using dynamic protocol: %s\n", obfuscated_protocol);
++				} else {
++					obfuscated_protocol = "frida:rpc";
++					stderr.printf("[Florida-Enhanced] Standard mode: Using standard protocol for client compatibility\n");
++				}
 +				
-+				var prefix = prefixes[Random.int_range(0, prefixes.length)];
-+				var suffix = suffixes[Random.int_range(0, suffixes.length)];
-+				var random_mid = "%04x".printf((uint16)(seed & 0xFFFF));
-+				
-+				obfuscated_protocol = "%s:%s%s".printf(prefix, suffix, random_mid);
++				// Save protocol info for client usage
++				save_protocol_info();
 +			}
 +			return obfuscated_protocol;
 +		}
@@ -39,13 +53,62 @@ index 8990b70e..d5acfebd 100644
 +		public static string get_quoted_protocol() {
 +			return "\"%s\"".printf(get_dynamic_protocol());
 +		}
++		
++		private static void save_protocol_info() {
++			if (protocol_info_saved) return;
++			
++			try {
++				var now = new DateTime.now_local();
++				var pid = Posix.getpid();
++				var timestamp = now.to_unix();
++				
++				// Create protocol info JSON
++				var json_builder = new Json.Builder();
++				json_builder.begin_object();
++				json_builder.set_member_name("protocol");
++				json_builder.add_string_value(obfuscated_protocol);
++				json_builder.set_member_name("timestamp");
++				json_builder.add_int_value(timestamp);
++				json_builder.set_member_name("pid");
++				json_builder.add_int_value(pid);
++				json_builder.set_member_name("server_version");
++				json_builder.add_string_value("Florida-Enhanced-16.7.19");
++				json_builder.end_object();
++				
++				var generator = new Json.Generator();
++				generator.set_root(json_builder.get_root());
++				var json_data = generator.to_data(null);
++				
++				// Save to multiple locations for client access
++				var paths = new string[] {
++					"/data/local/tmp/.frida_protocol_info",
++					"/tmp/.frida_protocol_info",
++					"/sdcard/.frida_protocol_info"
++				};
++				
++				foreach (var path in paths) {
++					try {
++						FileUtils.set_contents(path, json_data);
++						// Also log to stderr for debugging
++						stderr.printf("[Florida-Enhanced] Protocol info saved to: %s\n", path);
++						stderr.printf("[Florida-Enhanced] Current protocol: %s\n", obfuscated_protocol);
++					} catch (FileError e) {
++						// Silently continue if path is not writable
++					}
++				}
++				
++				protocol_info_saved = true;
++			} catch (Error e) {
++				stderr.printf("[Florida-Enhanced] Failed to save protocol info: %s\n", e.message);
++			}
++		}
 +	}
 +}
 +
  namespace Frida {
  	public sealed class RpcClient : Object {
  		public weak RpcPeer peer {
-@@ -17,7 +50,7 @@ namespace Frida {
+@@ -17,7 +85,7 @@ namespace Frida {
  			var request = new Json.Builder ();
  			request
  				.begin_array ()
@@ -54,22 +117,48 @@ index 8990b70e..d5acfebd 100644
  				.add_string_value (request_id)
  				.add_string_value ("call")
  				.add_string_value (method)
-@@ -65,7 +98,7 @@ namespace Frida {
+@@ -65,7 +133,7 @@ namespace Frida {
  		}
  
- 		public bool try_handle_message (string json) {
+ 				public bool try_handle_message (string json) {
 -			if (json.index_of ("\"frida:rpc\"") == -1)
-+			if (json.index_of (FridaEnhanced.ProtocolObfuscator.get_quoted_protocol()) == -1)
- 				return false;
++			// In standard mode (default), only accept standard protocol
++			// In advanced mode, accept both standard and dynamic protocols
++			string? enable_obfuscation = Environment.get_variable("FLORIDA_ENABLE_PROTOCOL_OBFUSCATION");
++			string? enable_advanced = Environment.get_variable("FLORIDA_ENABLE_ADVANCED_MODE");
++			
++			bool has_standard = json.index_of ("\"frida:rpc\"") != -1;
++			bool has_dynamic = json.index_of (FridaEnhanced.ProtocolObfuscator.get_quoted_protocol()) != -1;
++			
++			if (enable_obfuscation == "1" || enable_advanced == "1") {
++				// Advanced mode: accept both protocols
++				if (!has_standard && !has_dynamic)
++					return false;
++			} else {
++				// Standard mode: only accept standard protocol
++				if (!has_standard)
++					return false;
++			}
++			stderr.printf("[Florida-Enhanced] Protocol message accepted\n");
  
  			var parser = new Json.Parser ();
-@@ -94,7 +127,7 @@ namespace Frida {
+@@ -94,7 +162,7 @@ namespace Frida {
  				return false;
  
- 			string? type = rpc_message.get_element (0).get_string ();
+ 						string? type = rpc_message.get_element (0).get_string ();
 -			if (type == null || type != "frida:rpc")
-+			if (type == null || type != FridaEnhanced.ProtocolObfuscator.get_dynamic_protocol())
- 				return false;
++			// In standard mode (default), only accept standard protocol
++			// In advanced mode, accept both standard and dynamic protocols
++			bool type_valid = false;
++			if (enable_obfuscation == "1" || enable_advanced == "1") {
++				// Advanced mode: accept both protocols
++				type_valid = (type == "frida:rpc" || type == FridaEnhanced.ProtocolObfuscator.get_dynamic_protocol());
++			} else {
++				// Standard mode: only accept standard protocol
++				type_valid = (type == "frida:rpc");
++			}
++			if (type == null || !type_valid)
+				return false;
  
  			var request_id_value = rpc_message.get_element (1);
 -- 
