@@ -11,8 +11,10 @@ diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
 index 8990b70e..f8d4c3e2 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -1,3 +1,71 @@
+@@ -1,3 +1,73 @@
 +// Enhanced: Dynamic RPC protocol string generator with client support
++using Json;
++
 +namespace FridaEnhanced {
 +	public class ProtocolObfuscator {
 +		private static string? obfuscated_protocol = null;
@@ -149,6 +151,9 @@ index 8990b70e..f8d4c3e2 100644
 -			if (type == null || type != "frida:rpc")
 +			// In standard mode (default), only accept standard protocol
 +			// In advanced mode, accept both standard and dynamic protocols
++			string? enable_obfuscation = Environment.get_variable("FLORIDA_ENABLE_PROTOCOL_OBFUSCATION");
++			string? enable_advanced = Environment.get_variable("FLORIDA_ENABLE_ADVANCED_MODE");
++			
 +			bool type_valid = false;
 +			if (enable_obfuscation == "1" || enable_advanced == "1") {
 +				// Advanced mode: accept both protocols
