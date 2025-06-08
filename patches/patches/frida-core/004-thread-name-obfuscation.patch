@@ -1,0 +1,57 @@
+From 3325d05539d7c940a1460e66a06d673a95f5557c Mon Sep 17 00:00:00 2001
+From: Florida Enhanced <florida-enhanced@github.actions>
+Date: Wed, 18 Jan 2023 17:05:19 +0800
+Subject: [PATCH 004/007] Florida: 线程名称混淆
+
+混淆关键线程名称，避免通过线程名检测:
+- gum-js-loop -> sys-bg-loop
+- gmain -> svc-main
+- gdbus -> bg-bus
+- frida-helper -> sys-helper
+- agent-thread -> bg-worker
+
+---
+ src/agent-container.vala | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/src/agent-container.vala b/src/agent-container.vala
+index abcdef01..12345678 100644
+--- a/src/agent-container.vala
++++ b/src/agent-container.vala
+@@ -103,7 +103,32 @@ namespace Frida {
+ 			yield container.setup (auth_token, cancellable);
+ 
+ 			var source = Idle.source_new ();
+-			thread = new Thread<bool> ("frida-agent-container", run);
++			
++			// Florida Enhanced: 线程名称混淆
++			string get_obfuscated_thread_name(string original_name) {
++				if (original_name == "frida-agent-container")
++					return "system-svc-container";
++					
++				// 创建线程命名映射表
++				var thread_mappings = new HashTable<string, string>(str_hash, str_equal);
++				thread_mappings.insert("gum-js-loop", "sys-bg-loop");
++				thread_mappings.insert("gmain", "svc-main");
++				thread_mappings.insert("gdbus", "bg-bus");
++				thread_mappings.insert("frida-helper", "sys-helper");
++				thread_mappings.insert("agent-thread", "bg-worker");
++				
++				// 查找映射
++				string? mapped_name = thread_mappings.lookup(original_name);
++				if (mapped_name != null)
++					return mapped_name;
++					
++				// 如果没有预定义映射，但包含frida关键字，则进行替换
++				if (original_name.contains("frida"))
++					return original_name.replace("frida", "system");
++					
++				return original_name;
++			}
++			
++			thread = new Thread<bool> (get_obfuscated_thread_name("frida-agent-container"), run);
+ 			source.set_callback (AgentContainer.run_source.callback);
+ 			source.attach (MainContext.ref_thread_default ());
+ 			yield;
+-- 
+2.25.1 

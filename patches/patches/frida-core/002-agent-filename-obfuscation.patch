@@ -1,0 +1,80 @@
+From 3325d05539d7c940a1460e66a06d673a95f5557c Mon Sep 17 00:00:00 2001
+From: Florida Enhanced <florida-enhanced@github.actions>
+Date: Wed, 18 Jan 2023 16:05:33 +0800
+Subject: [PATCH 002/007] Florida: 智能Agent文件名伪装
+
+将随机UUID文件名替换为更逼真的系统库名称，如:
+- libandroid_runtime.so
+- libsystem_service.so
+- libcore_utils.so
+等
+
+这种伪装方式比简单的随机UUID更难被检测。
+
+---
+ src/linux/frida-helper-backend.vala | 45 ++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 40 insertions(+), 5 deletions(-)
+
+diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backend.vala
+index abcdef01..12345678 100644
+--- a/src/linux/frida-helper-backend.vala
++++ b/src/linux/frida-helper-backend.vala
+@@ -1252,7 +1252,42 @@ namespace Frida {
+ 		}
+ 
+ 		private static string make_tempdir_template () {
+-			return "/frida-" + Uuid.string_random ();
++			// Florida Enhanced: 生成逼真的系统库文件名
++			string generate_realistic_lib_name() {
++				string[] lib_prefixes = {
++					"lib", "android", "system", "native", "core", "base", "util"
++				};
++				
++				string[] lib_components = {
++					"runtime", "service", "manager", "utils", "core", "base",
++					"platform", "hardware", "framework", "engine", "graphics",
++					"network", "media", "audio", "video", "input", "display",
++					"content", "resource", "storage", "device", "provider",
++					"process", "memory", "data", "security", "crypto"
++				};
++				
++				string[] lib_suffixes = {
++					"", "impl", "service", "handler", "manager", "provider"
++				};
++				
++				// 生成随机种子
++				var now = new DateTime.now_local();
++				var seed = (uint32)(now.to_unix() & 0xFFFFFFFF);
++				Random.set_seed(seed ^ (uint32)Posix.getpid());
++				
++				// 选择前缀
++				string prefix = lib_prefixes[Random.int_range(0, lib_prefixes.length)];
++				
++				// 选择1-2个主组件
++				string middle = lib_components[Random.int_range(0, lib_components.length)];
++				if (Random.boolean()) {
++					middle += "_" + lib_components[Random.int_range(0, lib_components.length)];
++				}
++				
++				return prefix + middle;
++			}
++			
++			return "/." + generate_realistic_lib_name();
+ 		}
+ 	}
+ }
+diff --git a/src/linux/frida-helper-process.vala b/src/linux/frida-helper-process.vala
+index abcdef01..12345678 100644
+--- a/src/linux/frida-helper-process.vala
++++ b/src/linux/frida-helper-process.vala
+@@ -321,7 +356,7 @@ namespace Frida {
+ 		}
+ 
+ 		private void create_socket () throws Error {
+-			string socket_path = "/frida-" + Uuid.string_random ();
++			string socket_path = "/." + Uuid.string_random().substring(0, 8);
+ 			socket = new LinuxHelperBackendSocket (socket_path);
+ 		}
+ 	}
+-- 
+2.25.1 

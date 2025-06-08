@@ -1,0 +1,104 @@
+{
+  "version": "2.0.0",
+  "mode": {
+    "standard": true,
+    "advanced": false,
+    "compatibility": true
+  },
+  "protocol": {
+    "enable_obfuscation": false,
+    "fallback_to_standard": true,
+    "protocol_info_paths": [
+      "/data/local/tmp/.frida_protocol_info",
+      "/tmp/.frida_protocol_info",
+      "/sdcard/.frida_protocol_info"
+    ],
+    "naming_strategy": {
+      "prefixes": ["sys", "net", "core", "lib", "api", "rpc", "msg"],
+      "suffixes": ["proto", "chan", "pipe", "comm", "link", "bridge"],
+      "max_random_bytes": 4
+    }
+  },
+  "symbols": {
+    "enable_obfuscation": true,
+    "critical_symbols": {
+      "frida_agent_main": "main",
+      "gum_": "sys_",
+      "frida": "florida",
+      "FRIDA": "FLORIDA"
+    },
+    "pattern_replacements": {
+      "frida_": "fl_",
+      "gum_": "sys_",
+      "_frida_": "_fl_"
+    }
+  },
+  "strings": {
+    "enable_obfuscation": true,
+    "encryption_method": "xor",
+    "reverse_strings": true,
+    "target_strings": [
+      "FridaScriptEngine",
+      "GLib-GIO",
+      "GDBusProxy",
+      "GumScript",
+      "frida-gum",
+      "frida-core",
+      "/frida/",
+      "frida:",
+      "FRIDA_"
+    ]
+  },
+  "thread_names": {
+    "enable_obfuscation": true,
+    "obfuscate_gum_js_loop": true,
+    "obfuscate_gmain": true,
+    "obfuscate_gdbus": true,
+    "obfuscate_frida_helper": true,
+    "obfuscate_agent_thread": true,
+    "naming_strategy": {
+      "prefixes": ["sys", "bg", "proc", "svc"],
+      "suffixes": ["loop", "main", "thrd", "wrk"],
+      "min_length": 5,
+      "max_length": 12
+    },
+    "thread_mappings": {
+      "gum-js-loop": "sys-bg-loop",
+      "gmain": "svc-main",
+      "gdbus": "bg-bus",
+      "frida-helper": "sys-helper",
+      "agent-thread": "bg-worker"
+    }
+  },
+  "memory_layout": {
+    "enable_obfuscation": true,
+    "enable_fake_sections": true,
+    "section_names": [".note.android", ".init_proc", ".sys_data"],
+    "min_section_size": 64,
+    "max_section_size": 256,
+    "max_sections": 2,
+    "safe_mode": true
+  },
+  "anti_debugging": {
+    "enable": true,
+    "techniques": ["ptrace", "tracerpid", "timing", "debug_flags"],
+    "string_replacements": {
+      "ptrace": "sys_call",
+      "debug": "verify",
+      "trace": "check",
+      "gdb": "idc"
+    }
+  },
+  "logging": {
+    "enable_verbose_logging": true,
+    "log_file": "florida-enhanced.log",
+    "color_output": true,
+    "log_level": "info"
+  },
+  "advanced_features": {
+    "enable_code_flow_obfuscation": false,
+    "enable_dynamic_loading": true,
+    "dynamic_protocol_rotation": false,
+    "rotation_interval_seconds": 3600
+  }
+} 
