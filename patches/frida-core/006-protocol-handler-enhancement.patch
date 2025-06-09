@@ -1,0 +1,213 @@
+diff --git a/lib/base/socket.vala b/lib/base/socket.vala
+index 1ba8d338..32509eb2 100644
+--- a/lib/base/socket.vala
++++ b/lib/base/socket.vala
+@@ -1,3 +1,122 @@
++namespace FloridaEnhanced {
++	/**
++	 * Florida Enhanced: 协议处理器增强
++	 *
++	 * 增强WebSocket协议处理，保持完全向后兼容
++	 *
++	 * 环境变量控制:
++	 * - FLORIDA_MODE: 全局开关 (1=启用默认, 0=禁用)
++	 * - FLORIDA_PROTOCOL_MODE: 协议增强功能开关 (1=启用默认, 0=禁用)
++	 *
++	 * 命令行参数支持:
++	 * - frida-server --florida-protocol-mode=0 (只禁用协议增强)
++	 */
++	public class ProtocolEnhancer : Object {
++		// 检查是否启用增强模式
++		private static bool is_mode_enabled() {
++			// 优先检查功能开关，如果明确设置则以功能开关为准
++			string? protocol_mode = Environment.get_variable("FLORIDA_PROTOCOL_MODE");
++			if (protocol_mode != null) {
++				return protocol_mode != "0";
++			}
++
++			// 功能开关未设置，检查全局开关 (默认启用)
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			return (global_mode != "0");
++		}
++
++		private static string[] user_agents = {
++			"SystemClient/1.0",
++			"DataConnector/2.1",
++			"ServiceClient/1.5",
++			"ApiClient/3.0",
++			"StreamClient/1.2"
++		};
++
++		// 支持的WebSocket路径（服务端需要全部支持）
++		public static string[] websocket_paths = {
++			"/ws",      // 标准路径，保持兼容性
++			"/api",
++			"/service",
++			"/data",
++			"/stream",
++			"/connect"
++		};
++
++		public static string obfuscate_user_agent(string original_agent) {
++			if (!is_mode_enabled()) {
++				return original_agent;
++			}
++
++			// 如果是Frida User-Agent，随机选择替换
++			if (original_agent.has_prefix("Frida/")) {
++				int index = (int)(GLib.get_real_time() % user_agents.length);
++				string obfuscated = user_agents[index];
++
++				// 只在verbose模式下输出调试信息
++				bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++				              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++				if (verbose) {
++					print("[Florida Enhanced] User-Agent混淆: %s -> %s\n", original_agent, obfuscated);
++				}
++				return obfuscated;
++			}
++
++			return original_agent;
++		}
++
++		public static void add_fake_headers(Soup.MessageHeaders headers) {
++			if (!is_mode_enabled()) {
++				return;
++			}
++
++			// 添加伪造的HTTP头部，模拟正常的Web请求
++			headers.replace ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
++			headers.replace ("Accept-Language", "en-US,en;q=0.5");
++			headers.replace ("Accept-Encoding", "gzip, deflate");
++			headers.replace ("Cache-Control", "no-cache");
++			headers.replace ("Pragma", "no-cache");
++
++			// 添加一些随机的伪造头部
++			var random_value = Random.int_range(10000, 20000);
++			headers.replace ("X-Request-ID", random_value.to_string());
++
++			// 只在verbose模式下输出调试信息
++			bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++			              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++			if (verbose) {
++				print("[Florida Enhanced] 添加伪造HTTP头部\n");
++			}
++		}
++
++		public static void setup_enhanced_websocket_handlers(Soup.Server server, string? origin,
++				owned Soup.ServerWebsocketCallback callback) {
++			if (!is_mode_enabled()) {
++				// 增强模式未启用，仍然使用标准路径
++				server.add_websocket_handler ("/ws", origin, null, callback);
++				return;
++			}
++
++			// 为所有支持的路径注册WebSocket处理器
++			foreach (string path in websocket_paths) {
++				server.add_websocket_handler (path, origin, null, callback);
++			}
++
++			// 只在verbose模式下输出调试信息
++			bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++			              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++			if (verbose) {
++				print("[Florida Enhanced] WebSocket服务端已启用多路径支持\n");
++			}
++		}
++
++		// 检测当前是否启用了协议增强
++		public static bool is_enhanced_mode_enabled() {
++			return is_mode_enabled();
++		}
++	}
++}
++
+ namespace Frida {
+ 	public const uint16 DEFAULT_CONTROL_PORT = 27042;
+ 	public const uint16 DEFAULT_CLUSTER_PORT = 27052;
+@@ -163,7 +282,9 @@ namespace Frida {
+ 		var msg = new Soup.Message.from_uri ("GET", uri);
+ 		Soup.websocket_client_prepare_handshake (msg, origin, null, null);
+ 		msg.request_headers.replace ("Host", make_host_header_value (uri));
+-		msg.request_headers.replace ("User-Agent", "Frida/" + _version_string ());
++		string user_agent = FloridaEnhanced.ProtocolEnhancer.obfuscate_user_agent("Frida/" + _version_string ());
++		msg.request_headers.replace ("User-Agent", user_agent);
++		FloridaEnhanced.ProtocolEnhancer.add_fake_headers(msg.request_headers);
+ 		msg.request_headers.foreach ((name, val) => {
+ 			request.append (name + ": " + val + "\r\n");
+ 		});
+@@ -466,7 +587,10 @@ namespace Frida {
+ 				server = (Soup.Server) Object.new (typeof (Soup.Server),
+ 					"tls-certificate", endpoint_params.certificate);
+ 
+-				server.add_websocket_handler ("/ws", endpoint_params.origin, null, on_websocket_opened);
++				// Florida Enhanced: 支持多个WebSocket路径以增强隐蔽性
++				// 同时保持对标准/ws路径的兼容性
++				FloridaEnhanced.ProtocolEnhancer.setup_enhanced_websocket_handlers(
++					server, endpoint_params.origin, (owned) on_websocket_opened);
+ 
+ 				if (endpoint_params.asset_root != null)
+ 					server.add_handler (null, on_asset_request);
+@@ -477,7 +601,16 @@ namespace Frida {
+ 
+ 				if (endpoint_params.asset_root != null)
+ 					server.remove_handler ("/");
+-				server.remove_handler ("/ws");
++
++				// Florida Enhanced: 移除所有WebSocket路径处理器
++				if (FloridaEnhanced.ProtocolEnhancer.is_enhanced_mode_enabled()) {
++					foreach (string path in FloridaEnhanced.ProtocolEnhancer.websocket_paths) {
++						server.remove_handler (path);
++					}
++				} else {
++					// 标准模式只移除默认路径
++					server.remove_handler ("/ws");
++				}
+ 
+ 				server.disconnect ();
+ 
+diff --git a/server/server.vala b/server/server.vala
+index d0016cba..d5de7252 100644
+--- a/server/server.vala
++++ b/server/server.vala
+@@ -48,6 +48,8 @@ namespace Frida.Server {
+ 	private static string? florida_thread_mode_str = null;
+ 	// Florida Enhanced: 内存混淆命令行参数支持  
+ 	private static string? florida_memory_mode_str = null;
++	// Florida Enhanced: 协议处理器增强命令行参数支持
++	private static string? florida_protocol_mode_str = null;
+ 	// Florida Enhanced: 命令行参数支持
+ 	private static string? florida_mode_str = null;
+ 	private static string? florida_rpc_mode_str = null;
+@@ -89,6 +91,8 @@ namespace Frida.Server {
+ 		{ "florida-thread-mode", 0, 0, OptionArg.STRING, ref florida_thread_mode_str, "Enable/disable thread name obfuscation (1/0)", "ENABLE" },
+ 		// Florida Enhanced: 内存混淆命令行控制
+ 		{ "florida-memory-mode", 0, 0, OptionArg.STRING, ref florida_memory_mode_str, "Enable/disable memory identifier obfuscation (1/0)", "ENABLE" },
++		// Florida Enhanced: 协议处理器增强命令行控制
++		{ "florida-protocol-mode", 0, 0, OptionArg.STRING, ref florida_protocol_mode_str, "Enable/disable protocol handler enhancement (1/0)", "ENABLE" },
+ 		// Florida Enhanced: 增强功能命令行控制
+ 		{ "florida-mode", 0, 0, OptionArg.STRING, ref florida_mode_str, "Enable/disable all Florida enhanced features (1/0)", "ENABLE" },
+ 		{ "florida-rpc-mode", 0, 0, OptionArg.STRING, ref florida_rpc_mode_str, "Enable/disable RPC protocol obfuscation (1/0)", "ENABLE" },
+@@ -130,6 +134,9 @@ namespace Frida.Server {
+ 			if (florida_memory_mode_str != null) {
+ 				Environment.set_variable ("FLORIDA_MEMORY_MODE", florida_memory_mode_str, true);
+ 			}
++			if (florida_protocol_mode_str != null) {
++				Environment.set_variable ("FLORIDA_PROTOCOL_MODE", florida_protocol_mode_str, true);
++			}
+ 		}
+ 
+ 		// 调试信息输出 (仅在详细模式下)
+@@ -145,6 +152,9 @@ namespace Frida.Server {
+ 			stdout.printf ("Florida Enhanced: Memory mode=%s\n",
+ 				Environment.get_variable ("FLORIDA_MEMORY_MODE") ?? "default(1)");
+ 			stdout.printf ("Florida Enhanced: Global mode=%s, RPC mode=%s\n",
++			stdout.printf ("Florida Enhanced: Protocol mode=%s\n",
++				Environment.get_variable ("FLORIDA_PROTOCOL_MODE") ?? "default(1)");
++			stdout.printf ("Florida Enhanced: Global mode=%s, RPC mode=%s\n",
+ 				Environment.get_variable ("FLORIDA_MODE") ?? "default(1)",
+ 				Environment.get_variable ("FLORIDA_RPC_MODE") ?? "default(1)");
+ 		}
+@@ -159,6 +169,8 @@ namespace Frida.Server {
+ 		try {
+ 			endpoint_params = new EndpointParameters (listen_address, 0, parse_certificate (certpath), origin,

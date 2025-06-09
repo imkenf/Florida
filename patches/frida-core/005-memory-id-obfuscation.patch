@@ -1,0 +1,243 @@
+diff --git a/lib/selinux/patch.c b/lib/selinux/patch.c
+index db631ffd..ed4187d5 100644
+--- a/lib/selinux/patch.c
++++ b/lib/selinux/patch.c
+@@ -1,5 +1,43 @@
+ #include "frida-selinux.h"
+ 
++/*
++ * Florida Enhanced: SELinux策略混淆
++ *
++ * 将frida_memfd混淆为system_file，避免被SELinux策略检测
++ */
++
++#include <stdlib.h>
++#include <string.h>
++
++static const char* florida_get_obfuscated_selinux_type(const char* original_type) {
++    static int enhanced_mode = -1;
++
++    // 初始化增强模式标志
++    if (enhanced_mode == -1) {
++        const char* memory_mode = getenv("FLORIDA_MEMORY_MODE");
++        if (memory_mode != NULL) {
++            enhanced_mode = (strcmp(memory_mode, "0") != 0) ? 1 : 0;
++        } else {
++            // 功能开关未设置，检查全局开关
++            const char* global_mode = getenv("FLORIDA_MODE");
++            enhanced_mode = (global_mode == NULL || strcmp(global_mode, "0") != 0) ? 1 : 0;
++        }
++    }
++
++    if (!enhanced_mode) {
++        return original_type;
++    }
++
++    // 混淆frida_memfd为system_file (Android系统文件类型)
++    if (strcmp(original_type, "frida_memfd") == 0) {
++        return "system_file";
++    }
++
++    return original_type;
++}
++
++#define FLORIDA_OBFUSCATED_TYPE(type) florida_get_obfuscated_selinux_type(type)
++
+ #include <fcntl.h>
+ #include <gio/gio.h>
+ #include <selinux/selinux.h>
+diff --git a/server/server.vala b/server/server.vala
+index aa417a56..d0016cba 100644
+--- a/server/server.vala
++++ b/server/server.vala
+@@ -46,6 +46,8 @@ namespace Frida.Server {
+ 	private static bool verbose = false;
+ 	// Florida Enhanced: 线程名混淆命令行参数支持
+ 	private static string? florida_thread_mode_str = null;
++	// Florida Enhanced: 内存混淆命令行参数支持  
++	private static string? florida_memory_mode_str = null;
+ 	// Florida Enhanced: 命令行参数支持
+ 	private static string? florida_mode_str = null;
+ 	private static string? florida_rpc_mode_str = null;
+@@ -85,6 +87,8 @@ namespace Frida.Server {
+ 		{ "verbose", 'v', 0, OptionArg.NONE, ref verbose, "Be verbose", null },
+ 		// Florida Enhanced: 线程名混淆命令行控制
+ 		{ "florida-thread-mode", 0, 0, OptionArg.STRING, ref florida_thread_mode_str, "Enable/disable thread name obfuscation (1/0)", "ENABLE" },
++		// Florida Enhanced: 内存混淆命令行控制
++		{ "florida-memory-mode", 0, 0, OptionArg.STRING, ref florida_memory_mode_str, "Enable/disable memory identifier obfuscation (1/0)", "ENABLE" },
+ 		// Florida Enhanced: 增强功能命令行控制
+ 		{ "florida-mode", 0, 0, OptionArg.STRING, ref florida_mode_str, "Enable/disable all Florida enhanced features (1/0)", "ENABLE" },
+ 		{ "florida-rpc-mode", 0, 0, OptionArg.STRING, ref florida_rpc_mode_str, "Enable/disable RPC protocol obfuscation (1/0)", "ENABLE" },
+@@ -123,6 +127,9 @@ namespace Frida.Server {
+ 			if (florida_thread_mode_str != null) {
+ 				Environment.set_variable ("FLORIDA_THREAD_MODE", florida_thread_mode_str, true);
+ 			}
++			if (florida_memory_mode_str != null) {
++				Environment.set_variable ("FLORIDA_MEMORY_MODE", florida_memory_mode_str, true);
++			}
+ 		}
+ 
+ 		// 调试信息输出 (仅在详细模式下)
+@@ -135,6 +142,9 @@ namespace Frida.Server {
+ 			stdout.printf ("Florida Enhanced: Thread mode=%s\n",
+ 				Environment.get_variable ("FLORIDA_THREAD_MODE") ?? "default(1)");
+ 			stdout.printf ("Florida Enhanced: Global mode=%s, RPC mode=%s\n",
++			stdout.printf ("Florida Enhanced: Memory mode=%s\n",
++				Environment.get_variable ("FLORIDA_MEMORY_MODE") ?? "default(1)");
++			stdout.printf ("Florida Enhanced: Global mode=%s, RPC mode=%s\n",
+ 				Environment.get_variable ("FLORIDA_MODE") ?? "default(1)",
+ 				Environment.get_variable ("FLORIDA_RPC_MODE") ?? "default(1)");
+ 		}
+@@ -147,6 +157,8 @@ namespace Frida.Server {
+ 		try {
+ 			endpoint_params = new EndpointParameters (listen_address, 0, parse_certificate (certpath), origin,
+diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backend.vala
+index 1bbe475d..fd231d51 100644
+--- a/src/linux/frida-helper-backend.vala
++++ b/src/linux/frida-helper-backend.vala
+@@ -2293,6 +2293,26 @@ namespace Frida {
+ 				unowned Gum.FileMapping? file = d.file;
+ 				if (file != null && file.path.has_prefix ("memfd:"))
+ 					return true;
++
++				// Florida Enhanced: 检测混淆后的memfd路径
++				// 检查内存标识符混淆是否启用
++				string? memory_mode = Environment.get_variable("FLORIDA_MEMORY_MODE");
++				string? global_mode = Environment.get_variable("FLORIDA_MODE");
++				bool enhanced_mode;
++				if (memory_mode != null) {
++					enhanced_mode = memory_mode != "0";
++				} else {
++					enhanced_mode = (global_mode != "0");
++				}
++
++				if (file != null && enhanced_mode) {
++					// 检测系统库伪装的memfd
++					if (file.path.has_prefix ("memfd:lib") ||
++					    file.path.contains ("system") ||
++					    file.path.contains ("android")) {
++						return true;
++					}
++				}
+ 				if (d.range.size >= code.length) {
+ 					code_start = d.range.base_address + d.range.size - round_size_to_page_size (code.length);
+ 					code_end = code_start + code.length;
+diff --git a/src/linux/linjector.vala b/src/linux/linjector.vala
+index 5671438e..c638eb4b 100644
+--- a/src/linux/linjector.vala
++++ b/src/linux/linjector.vala
+@@ -1,3 +1,87 @@
++namespace FloridaEnhanced {
++	/**
++	 * Florida Enhanced: 内存标识符混淆增强
++	 *
++	 * 混淆memfd名称和SELinux上下文，避免被内存检测
++	 *
++	 * 环境变量控制:
++	 * - FLORIDA_MODE: 全局开关 (1=启用默认, 0=禁用)
++	 * - FLORIDA_MEMORY_MODE: 内存混淆功能开关 (1=启用默认, 0=禁用)
++	 *
++	 * 命令行参数支持:
++	 * - frida-server --florida-memory-mode=0 (只禁用内存标识符混淆)
++	 */
++	public class MemoryIdObfuscator : Object {
++		// 检查是否启用增强模式
++		private static bool is_mode_enabled() {
++			// 优先检查功能开关，如果明确设置则以功能开关为准
++			string? memory_mode = Environment.get_variable("FLORIDA_MEMORY_MODE");
++			if (memory_mode != null) {
++				return memory_mode != "0";
++			}
++
++			// 功能开关未设置，检查全局开关 (默认启用)
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			return (global_mode != "0");
++		}
++
++		private static string[] system_lib_names = {
++			"libandroid_runtime.so",
++			"libsystem_service.so",
++			"libcore_utils.so",
++			"libframework_base.so",
++			"libmedia_framework.so",
++			"libgraphics_engine.so"
++		};
++
++		public static string obfuscate_memfd_name(string original_name) {
++			if (!is_mode_enabled()) {
++				return original_name;
++			}
++
++			// 如果原名称是agent库，替换为系统库名称
++			if (original_name.has_suffix(".so")) {
++				// 使用时间戳选择系统库名称，增加随机性
++				int index = (int)(GLib.get_real_time() % system_lib_names.length);
++				string obfuscated = system_lib_names[index];
++
++				// 只在verbose模式下输出调试信息
++				bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++				              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++				if (verbose) {
++					print("[Florida Enhanced] MemFD名称混淆: %s -> %s\n", original_name, obfuscated);
++				}
++				return obfuscated;
++			}
++
++			// 通用混淆：替换frida关键字
++			string result = original_name.replace("frida", "system");
++			result = result.replace("agent", "lib");
++
++			if (result != original_name) {
++				// 只在verbose模式下输出调试信息
++				bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++				              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++				if (verbose) {
++					print("[Florida Enhanced] MemFD名称混淆: %s -> %s\n", original_name, result);
++				}
++			}
++
++			return result;
++		}
++
++		// 检测当前是否启用了内存标识符混淆
++		public static bool is_enhanced_mode_enabled() {
++			return is_mode_enabled();
++		}
++
++		// 获取混淆后的SELinux文件上下文
++		public static string get_obfuscated_selinux_context() {
++			return is_mode_enabled() ? "u:object_r:system_file:s0" : "u:object_r:frida_memfd:s0";
++		}
++	}
++}
++
+ namespace Frida {
+ 	public sealed class Linjector : Object, Injector {
+ 		public LinuxHelper helper {
+@@ -62,7 +146,7 @@ namespace Frida {
+ 			AgentFeatures features = 0;
+ 
+ 			if (MemoryFileDescriptor.is_supported ()) {
+-				FileDescriptor fd = MemoryFileDescriptor.from_bytes (name, blob);
++				FileDescriptor fd = MemoryFileDescriptor.from_bytes (FloridaEnhanced.MemoryIdObfuscator.obfuscate_memfd_name(name), blob);
+ 				adjust_fd_permissions (fd);
+ 				UnixInputStream library_so = new UnixInputStream (fd.steal (), true);
+ 				return yield inject_library_fd (pid, library_so, entrypoint, data, features, cancellable);
+@@ -254,7 +338,7 @@ namespace Frida {
+ 			if (_memfd == null) {
+ 				if (!MemoryFileDescriptor.is_supported ())
+ 					throw new Error.NOT_SUPPORTED ("Kernel too old for memfd support");
+-				FileDescriptor fd = MemoryFileDescriptor.from_bytes (name, blob);
++				FileDescriptor fd = MemoryFileDescriptor.from_bytes (FloridaEnhanced.MemoryIdObfuscator.obfuscate_memfd_name(name), blob);
+ 				adjust_fd_permissions (fd);
+ 				_memfd = new UnixInputStream (fd.steal (), true);
+ 			}
+@@ -278,7 +362,7 @@ namespace Frida {
+ 
+ 	private static void adjust_fd_permissions (FileDescriptor fd) {
+ #if ANDROID
+-		SELinux.fsetfilecon (fd.handle, "u:object_r:frida_memfd:s0");
++		SELinux.fsetfilecon (fd.handle, FloridaEnhanced.MemoryIdObfuscator.get_obfuscated_selinux_context());
+ #endif
+ 	}
+ }

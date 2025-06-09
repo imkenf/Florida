@@ -1,0 +1,232 @@
+diff --git a/server/server.vala b/server/server.vala
+index e7f11ff..7093106c 100644
+--- a/server/server.vala
++++ b/server/server.vala
+@@ -1,3 +1,30 @@
++namespace FloridaEnhanced {
++	/**
++	 * Florida Enhanced: 服务器端符号混淆支持
++	 */
++	public class ServerSymbolEnhancement : Object {
++		// 检查符号混淆是否启用
++		public static bool is_symbol_obfuscation_enabled() {
++			string? symbol_mode = Environment.get_variable("FLORIDA_SYMBOL_MODE");
++			if (symbol_mode != null) {
++				return symbol_mode != "0";
++			}
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			return (global_mode != "0");
++		}
++
++		// 应用命令行参数检查
++		public static void check_symbol_parameters(string[] args) {
++			for (int i = 0; i < args.length; i++) {
++				if (args[i].has_prefix("--florida-symbol-mode=")) {
++					string value = args[i].substring(22);
++					Environment.set_variable("FLORIDA_SYMBOL_MODE", value, true);
++				}
++			}
++		}
++	}
++}
++
+ namespace Frida.Server {
+ 	private static Application application;
+ 
+@@ -34,7 +61,7 @@ namespace Frida.Server {
+ 		{ "device", 0, 0, OptionArg.STRING, ref device_id, "Serve device with the given ID", "ID" },
+ 		{ "listen", 'l', 0, OptionArg.STRING, ref listen_address, "Listen on ADDRESS", "ADDRESS" },
+ 		{ "certificate", 0, 0, OptionArg.FILENAME, ref certpath, "Enable TLS using CERTIFICATE", "CERTIFICATE" },
+-		{ "origin", 0, 0, OptionArg.STRING, ref origin, "Only accept requests with “Origin” header matching ORIGIN " +
++		{ "origin", 0, 0, OptionArg.STRING, ref origin, "Only accept requests with "Origin" header matching ORIGIN " +
+ 			"(by default any origin will be accepted)", "ORIGIN" },
+ 		{ "token", 0, 0, OptionArg.STRING, ref token, "Require authentication using TOKEN", "TOKEN" },
+ 		{ "asset-root", 0, 0, OptionArg.FILENAME, ref asset_root, "Serve static files inside ROOT (by default no files are served)",
+diff --git a/src/agent-container.vala b/src/agent-container.vala
+index eecfa1f6..0af8619b 100644
+--- a/src/agent-container.vala
++++ b/src/agent-container.vala
+@@ -28,7 +28,53 @@ namespace Frida {
+ 			}
+ 
+ 			void * main_func_symbol;
+-			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
++
++			// Florida Enhanced: 符号名称混淆 - 同步查找混淆后的符号
++			string symbol_name = "frida_agent_main";
++
++			// 检查是否启用符号混淆
++			string? symbol_mode = Environment.get_variable("FLORIDA_SYMBOL_MODE");
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			bool enhanced_enabled;
++			if (symbol_mode != null) {
++				enhanced_enabled = (symbol_mode != "0");
++			} else {
++				enhanced_enabled = (global_mode != "0");
++			}
++
++			if (enhanced_enabled) {
++				// 尝试混淆后的符号名称
++				string[] alternatives = {
++					"main_agent",
++					"sys_exec",
++					"core_init",
++					"runtime_start",
++					"lib_main"
++				};
++
++				// 使用进程ID确保与注入时的选择一致
++				int index = (int)(Posix.getpid() % alternatives.length);
++				string obfuscated_symbol = alternatives[index];
++
++				bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++				              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++				if (verbose) {
++					print("[Florida Enhanced] Agent容器查找符号: %s\n", obfuscated_symbol);
++				}
++				symbol_name = obfuscated_symbol;
++			}
++
++			var main_func_found = container.module.symbol (symbol_name, out main_func_symbol);
++			// 如果混淆符号未找到，回退到原始符号（兼容性保证）
++			if (!main_func_found && enhanced_enabled) {
++				bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++				              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++				if (verbose) {
++					print("[Florida Enhanced] 混淆符号未找到，回退到原始符号\n");
++				}
++				main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
++			}
++
+ 			assert (main_func_found);
+ 			container.main_impl = (AgentMainFunc) main_func_symbol;
+ 
+diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backend.vala
+index 1bbe475d..e3931cff 100644
+--- a/src/linux/frida-helper-backend.vala
++++ b/src/linux/frida-helper-backend.vala
+@@ -1,3 +1,104 @@
++namespace FloridaEnhanced {
++	/**
++	 * Florida Enhanced: 符号名称混淆增强
++	 *
++	 * 动态混淆关键符号名称，避免被静态检测:
++	 * 1. frida_agent_main -> main_agent / sys_exec / core_init
++	 * 2. gum_* -> sys_*
++	 * 3. frida -> florida
++	 * 4. FRIDA -> FLORIDA
++	 *
++	 * 环境变量控制:
++	 * - FLORIDA_MODE: 全局开关 (1=启用默认, 0=禁用)
++	 * - FLORIDA_SYMBOL_MODE: 符号功能开关 (1=启用默认, 0=禁用)
++	 *
++	 * 命令行参数支持:
++	 * - frida-server --florida-symbol-mode=0 (只禁用符号混淆)
++	 */
++	public class SymbolObfuscator : Object {
++		private static string[] agent_entry_alternatives = {
++			"main_agent",
++			"sys_exec",
++			"core_init",
++			"runtime_start",
++			"lib_main"
++		};
++
++		private static string? cached_obfuscated_entrypoint = null;
++
++		// 检查是否启用增强模式
++		private static bool is_mode_enabled() {
++			// 优先检查功能开关，如果明确设置则以功能开关为准
++			string? symbol_mode = Environment.get_variable("FLORIDA_SYMBOL_MODE");
++			if (symbol_mode != null) {
++				return symbol_mode != "0";
++			}
++
++			// 功能开关未设置，检查全局开关 (默认启用)
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			return (global_mode != "0");
++		}
++
++		public static string obfuscate_entrypoint(string entrypoint) {
++			if (!is_mode_enabled()) {
++				return entrypoint;
++			}
++
++			// 如果是标准的frida_agent_main入口点
++			if (entrypoint == "frida_agent_main") {
++				// 使用缓存确保同一会话中始终使用相同的混淆名称
++				if (cached_obfuscated_entrypoint == null) {
++					// 使用进程ID确保同一进程中的一致性
++					int index = (int)(Posix.getpid() % agent_entry_alternatives.length);
++					cached_obfuscated_entrypoint = agent_entry_alternatives[index];
++
++					// 只在verbose模式下输出调试信息
++					bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++					              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++					if (verbose) {
++						print("[Florida Enhanced] 符号混淆: %s -> %s\n", entrypoint, cached_obfuscated_entrypoint);
++					}
++				}
++				return cached_obfuscated_entrypoint;
++			}
++
++			// 应用通用规则
++			string result = entrypoint;
++
++			// 1. 将gum_前缀替换为sys_
++			if (result.has_prefix("gum_")) {
++				result = "sys_" + result.substring(4);
++			}
++
++			// 2. 将frida替换为florida
++			result = result.replace("frida", "florida");
++
++			// 3. 将FRIDA替换为FLORIDA
++			result = result.replace("FRIDA", "FLORIDA");
++
++			// 只在verbose模式下输出调试信息
++			if (result != entrypoint) {
++				bool verbose = Environment.get_variable("FRIDA_VERBOSE") == "1" ||
++				              Environment.get_variable("FLORIDA_VERBOSE") == "1";
++				if (verbose) {
++					print("[Florida Enhanced] 符号混淆: %s -> %s\n", entrypoint, result);
++				}
++			}
++
++			return result;
++		}
++
++		public static string get_current_entrypoint() {
++			return obfuscate_entrypoint("frida_agent_main");
++		}
++
++		// 检测当前是否启用了符号混淆
++		public static bool is_enhanced_mode_enabled() {
++			return is_mode_enabled();
++		}
++	}
++}
++
+ namespace Frida {
+ 	public sealed class LinuxHelperBackend : Object, LinuxHelper {
+ 		public signal void idle ();
+@@ -918,6 +1019,7 @@ namespace Frida {
+ 				write_memory (loader_base + loader_layout.ctx_offset, (uint8[]) &loader_ctx);
+ 				write_memory (loader_base + loader_layout.libc_api_offset, (uint8[]) &bootstrap_result.libc);
+ 				write_memory_string (loader_base + loader_layout.agent_entrypoint_offset, spec.entrypoint);
++				// Florida Enhanced: 符号名称混淆已在InjectSpec创建时处理
+ 				write_memory_string (loader_base + loader_layout.agent_data_offset, spec.data);
+ 				write_memory_string (loader_base + loader_layout.fallback_address_offset, fallback_address);
+ 
+diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
+index 55a0fbec..a7d48b62 100644
+--- a/src/linux/linux-host-session.vala
++++ b/src/linux/linux-host-session.vala
+@@ -362,6 +362,7 @@ namespace Frida {
+ 			uint id;
+ 			string entrypoint = "frida_agent_main";
+ 			string parameters = make_agent_parameters (pid, "", options);
++			entrypoint = FloridaEnhanced.SymbolObfuscator.obfuscate_entrypoint(entrypoint);
+ 			AgentFeatures features = CONTROL_CHANNEL;
+ 			var linjector = (Linjector) injector;
+ #if HAVE_EMBEDDED_ASSETS

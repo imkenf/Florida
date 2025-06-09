@@ -1,0 +1,264 @@
+diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
+index c4654527..f70f528d 100644
+--- a/lib/base/rpc.vala
++++ b/lib/base/rpc.vala
+@@ -1,3 +1,111 @@
++namespace FloridaEnhanced {
++	/**
++	 * Florida Enhanced: 动态RPC协议生成与双模式支持
++	 *
++	 * 这个命名空间提供了增强的RPC协议支持，包括:
++	 * 1. 标准模式 - 与普通Frida兼容
++	 * 2. 增强模式 - 使用混淆的命令字符串
++	 *
++	 * 环境变量控制:
++	 * - FLORIDA_MODE: 全局开关 (1=启用默认, 0=禁用)
++	 * - FLORIDA_RPC_MODE: RPC功能开关 (1=启用默认, 0=禁用)
++	 *
++	 * 命令行参数支持:
++	 * - frida-server --florida-mode=0     (禁用所有增强功能)
++	 * - frida-server --florida-rpc-mode=0 (只禁用RPC混淆)
++	 * - frida-server --no-florida         (快速禁用所有功能)
++	 */
++
++	public class RpcProtocolEnhancer {
++		private static HashTable<string, string>? _command_map = null;
++		private static HashTable<string, string>? _reverse_map = null;
++		private static bool _enhanced_mode_enabled = false;
++
++		// 检查是否启用增强模式
++		private static bool is_mode_enabled() {
++			// 优先检查功能开关，如果明确设置则以功能开关为准
++			string? rpc_mode = Environment.get_variable("FLORIDA_RPC_MODE");
++			if (rpc_mode != null) {
++				return rpc_mode != "0";
++			}
++
++			// 功能开关未设置，检查全局开关 (默认启用)
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			return (global_mode != "0");
++		}
++
++		// 初始化增强器
++		public static void init() {
++			_enhanced_mode_enabled = is_mode_enabled();
++
++			// 避免重复初始化
++			if (_command_map != null)
++				return;
++
++			_command_map = new HashTable<string, string>(str_hash, str_equal);
++			_reverse_map = new HashTable<string, string>(str_hash, str_equal);
++
++			// 基础协议标识符映射
++			_command_map.insert("frida:rpc", "invoke:op");
++			_command_map.insert("call", "exec");
++			_command_map.insert("ok", "success");
++
++			// 创建反向映射
++			var keys = _command_map.get_keys();
++			foreach (var key in keys) {
++				_reverse_map.insert(_command_map.get(key), key);
++			}
++		}
++
++		// 获取命令映射 (标准 -> 增强)
++		public static string map_command(string cmd) {
++			if (!_enhanced_mode_enabled)
++				return cmd;
++
++			if (_command_map == null)
++				init();
++
++			string? mapped = _command_map.lookup(cmd);
++			return (mapped != null) ? mapped : cmd;
++		}
++
++		// 获取命令反向映射 (增强 -> 标准)
++		public static string reverse_map_command(string cmd) {
++			if (!_enhanced_mode_enabled)
++				return cmd;
++
++			if (_reverse_map == null)
++				init();
++
++			string? mapped = _reverse_map.lookup(cmd);
++			return (mapped != null) ? mapped : cmd;
++		}
++
++		// 检测是否是已知的增强命令
++		public static bool is_enhanced_command(string cmd) {
++			if (_reverse_map == null)
++				init();
++
++			return _reverse_map.contains(cmd);
++		}
++
++		// 是否启用了增强模式
++		public static bool is_enhanced_mode_enabled() {
++			return _enhanced_mode_enabled;
++		}
++
++		// 生成随机请求ID前缀，增加检测难度
++		public static string generate_request_id_prefix() {
++			if (!_enhanced_mode_enabled)
++				return "";
++
++			var prefixes = {"req", "id", "op", "cmd", "task"};
++			var random_index = Random.int_range(0, prefixes.length);
++			return prefixes[random_index] + "_";
++		}
++	}
++}
++
+ namespace Frida {
+ 	public sealed class RpcClient : Object {
+ 		public weak RpcPeer peer {
+@@ -7,6 +115,12 @@ namespace Frida {
+ 
+ 		private Gee.HashMap<string, PendingResponse> pending_responses = new Gee.HashMap<string, PendingResponse> ();
+ 
++		// Florida Enhanced: 初始化RPC协议增强器
++		static construct {
++			// 初始化RPC协议增强器 (通过环境变量控制)
++			FloridaEnhanced.RpcProtocolEnhancer.init();
++		}
++
+ 		public RpcClient (RpcPeer peer) {
+ 			Object (peer: peer);
+ 		}
+@@ -14,12 +128,16 @@ namespace Frida {
+ 		public async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
+ 			string request_id = Uuid.string_random ();
+ 
++			// Florida Enhanced: 添加随机前缀到请求ID
++			string enhanced_request_id = FloridaEnhanced.RpcProtocolEnhancer.generate_request_id_prefix() + request_id;
++
+ 			var request = new Json.Builder ();
+ 			request
+ 				.begin_array ()
+-				.add_string_value ("frida:rpc")
+-				.add_string_value (request_id)
+-				.add_string_value ("call")
++				// Florida Enhanced: 使用增强的协议标识符
++				.add_string_value (FloridaEnhanced.RpcProtocolEnhancer.map_command("frida:rpc"))
++				.add_string_value (enhanced_request_id)
++				.add_string_value (FloridaEnhanced.RpcProtocolEnhancer.map_command("call"))
+ 				.add_string_value (method)
+ 				.begin_array ();
+ 			foreach (var arg in args)
+@@ -36,19 +154,19 @@ namespace Frida {
+ 					call.callback ();
+ 				return false;
+ 			});
+-			pending_responses[request_id] = pending;
++			pending_responses[enhanced_request_id] = pending;
+ 
+ 			try {
+ 				yield peer.post_rpc_message (raw_request, data, cancellable);
+ 			} catch (Error e) {
+-				if (pending_responses.unset (request_id))
++				if (pending_responses.unset (enhanced_request_id))
+ 					pending.complete_with_error (e);
+ 			}
+ 
+ 			if (!pending.completed) {
+ 				var cancel_source = new CancellableSource (cancellable);
+ 				cancel_source.set_callback (() => {
+-					if (pending_responses.unset (request_id))
++					if (pending_responses.unset (enhanced_request_id))
+ 						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
+ 					return false;
+ 				});
+@@ -70,7 +188,10 @@ namespace Frida {
+ 		}
+ 
+ 		public bool try_handle_message (string json) {
+-			if (json.index_of ("\"frida:rpc\"") == -1)
++			// Florida Enhanced: 支持标准和增强协议标识符的检测
++			string standard_marker = "\"frida:rpc\"";
++			string enhanced_marker = "\"" + FloridaEnhanced.RpcProtocolEnhancer.map_command("frida:rpc") + "\"";
++			if (json.index_of (standard_marker) == -1 && json.index_of (enhanced_marker) == -1)
+ 				return false;
+ 
+ 			var parser = new Json.Parser ();
+@@ -98,8 +219,11 @@ namespace Frida {
+ 			if (rpc_message.get_length () < 4)
+ 				return false;
+ 
+-			string? type = rpc_message.get_element (0).get_string ();
+-			if (type == null || type != "frida:rpc")
++			string? type_raw = rpc_message.get_element (0).get_string ();
++			if (type_raw == null)
++				return false;
++			string type = FloridaEnhanced.RpcProtocolEnhancer.reverse_map_command(type_raw);
++			if (type != "frida:rpc")
+ 				return false;
+ 
+ 			var request_id_value = rpc_message.get_element (1);
+@@ -111,7 +235,10 @@ namespace Frida {
+ 			if (!pending_responses.unset (request_id, out response))
+ 				return false;
+ 
+-			var status = rpc_message.get_string_element (2);
++			var status_raw = rpc_message.get_string_element (2);
++			// Florida Enhanced: 支持增强的状态码
++			string status = FloridaEnhanced.RpcProtocolEnhancer.reverse_map_command(status_raw);
++
+ 			if (status == "ok")
+ 				response.complete_with_result (rpc_message.get_element (3));
+ 			else
+diff --git a/server/server.vala b/server/server.vala
+index 67bf4b38..66181a3a 100644
+--- a/server/server.vala
++++ b/server/server.vala
+@@ -17,6 +17,10 @@ namespace Frida.Server {
+ 	private static bool enable_preload = true;
+ 	private static bool report_crashes = true;
+ 	private static bool verbose = false;
++	// Florida Enhanced: 命令行参数支持
++	private static string? florida_mode_str = null;
++	private static string? florida_rpc_mode_str = null;
++	private static bool no_florida = false;
+ 
+ 	private enum PolicySoftenerFlavor {
+ 		SYSTEM,
+@@ -48,6 +52,10 @@ namespace Frida.Server {
+ 		{ "ignore-crashes", 'C', OptionFlags.REVERSE, OptionArg.NONE, ref report_crashes,
+ 			"Disable native crash reporter integration", null },
+ 		{ "verbose", 'v', 0, OptionArg.NONE, ref verbose, "Be verbose", null },
++		// Florida Enhanced: 增强功能命令行控制
++		{ "florida-mode", 0, 0, OptionArg.STRING, ref florida_mode_str, "Enable/disable all Florida enhanced features (1/0)", "ENABLE" },
++		{ "florida-rpc-mode", 0, 0, OptionArg.STRING, ref florida_rpc_mode_str, "Enable/disable RPC protocol obfuscation (1/0)", "ENABLE" },
++		{ "no-florida", 0, 0, OptionArg.NONE, ref no_florida, "Disable all Florida enhanced features", null },
+ 		{ null }
+ 	};
+ 
+@@ -78,6 +86,27 @@ namespace Frida.Server {
+ 
+ 		Environment.set_verbose_logging_enabled (verbose);
+ 
++		// Florida Enhanced: 处理命令行参数并设置对应的环境变量
++		if (no_florida) {
++			// --no-florida 快速禁用所有功能
++			Environment.set_variable ("FLORIDA_MODE", "0", true);
++		} else {
++			// 处理具体的开关参数
++			if (florida_mode_str != null) {
++				Environment.set_variable ("FLORIDA_MODE", florida_mode_str, true);
++			}
++			if (florida_rpc_mode_str != null) {
++				Environment.set_variable ("FLORIDA_RPC_MODE", florida_rpc_mode_str, true);
++			}
++		}
++
++		// 调试信息输出 (仅在详细模式下)
++		if (verbose) {
++			stdout.printf ("Florida Enhanced: Global mode=%s, RPC mode=%s\n",
++				Environment.get_variable ("FLORIDA_MODE") ?? "default(1)",
++				Environment.get_variable ("FLORIDA_RPC_MODE") ?? "default(1)");
++		}
++
+ 		EndpointParameters endpoint_params;
+ 		try {
+ 			endpoint_params = new EndpointParameters (listen_address, 0, parse_certificate (certpath), origin,
