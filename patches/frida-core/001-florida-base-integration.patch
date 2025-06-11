@@ -1,14 +1,14 @@
-From 4a2af38c964dcade9df70750c041d24d2f6976c8 Mon Sep 17 00:00:00 2001
+From 5c2cd3ea02f0b094cf8e040a2f5a80aded339d89 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Wed, 11 Jun 2025 18:49:01 +0800
+Date: Thu, 12 Jun 2025 00:01:30 +0800
 Subject: [PATCH 001/004] Florida Enhanced: 基础集成统一命令行参数和环境变量控制
 
 ---
- server/server.vala | 64 ++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 64 insertions(+)
+ server/server.vala | 96 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 95 insertions(+), 1 deletion(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..62a7897 100644
+index 67bf4b3..3fdd6db 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -17,6 +17,16 @@ namespace Frida.Server {
@@ -96,6 +96,46 @@ index 67bf4b3..62a7897 100644
  		EndpointParameters endpoint_params;
  		try {
  			endpoint_params = new EndpointParameters (listen_address, 0, parse_certificate (certpath), origin,
+@@ -178,8 +242,38 @@ namespace Frida.Server {
+ 
+ 		Environment.configure ();
+ 
++		// Florida Enhanced: 自包含的线程名混淆功能 (避免跨模块依赖)
++		string thread_name = "frida-server-main-loop";
++		
++		// 检查是否启用线程名混淆
++		string? thread_mode = Environment.get_variable("FLORIDA_THREAD_MODE");
++		bool thread_enhanced_enabled;
++		if (thread_mode != null) {
++			thread_enhanced_enabled = (thread_mode != "0");
++		} else {
++			// 功能开关未设置，检查全局开关 (默认启用)
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			thread_enhanced_enabled = (global_mode != "0");
++		}
++		
++		if (thread_enhanced_enabled) {
++			// 生成混淆后的线程名
++			string[] thread_prefixes = {"thread", "worker", "task", "job", "service", "handler", "process"};
++			string[] thread_components = {"main", "bg", "io", "net", "ui", "core", "util", "sys"};
++			string[] thread_suffixes = {"", "-1", "-2", "-pool", "-mgr", "-svc"};
++			
++			uint32 seed = (uint32)(get_real_time() % 1000000) ^ thread_name.hash();
++			Random.set_seed(seed);
++			
++			string prefix = thread_prefixes[Random.int_range(0, thread_prefixes.length)];
++			string component = thread_components[Random.int_range(0, thread_components.length)];
++			string suffix = thread_suffixes[Random.int_range(0, thread_suffixes.length)];
++			
++			thread_name = prefix + "-" + component + suffix;
++		}
++
+ #if DARWIN
+-		var worker = new Thread<int> ("frida-server-main-loop", () => {
++		var worker = new Thread<int> (thread_name, () => {
+ 			var exit_code = run_application (device_id, endpoint_params, options, on_ready);
+ 
+ 			_stop_run_loop ();
 -- 
 2.45.1.windows.1
 

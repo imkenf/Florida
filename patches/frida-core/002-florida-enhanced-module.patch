@@ -1,41 +1,22 @@
-From 34a38a3e0e76c0e9534719edfef8baf6d9b258ca Mon Sep 17 00:00:00 2001
+From 8ac757047264ea5855509d55f040f28c2e9e9b5e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Wed, 11 Jun 2025 18:51:29 +0800
+Date: Thu, 12 Jun 2025 00:05:23 +0800
 Subject: [PATCH 002/004] Florida Enhanced: 增强功能模块集合文件
 
 ---
- server/server.vala        |   7 +-
- src/florida-enhanced.vala | 413 ++++++++++++++++++++++++++++++++++++++
+ src/florida-enhanced.vala | 342 ++++++++++++++++++++++++++++++++++++++
  src/meson.build           |   1 +
- 3 files changed, 420 insertions(+), 1 deletion(-)
+ 2 files changed, 343 insertions(+)
  create mode 100644 src/florida-enhanced.vala
 
-diff --git a/server/server.vala b/server/server.vala
-index 62a7897..36c30b8 100644
---- a/server/server.vala
-+++ b/server/server.vala
-@@ -243,7 +243,12 @@ namespace Frida.Server {
- 		Environment.configure ();
- 
- #if DARWIN
--		var worker = new Thread<int> ("frida-server-main-loop", () => {
-+		// Florida Enhanced: 使用混淆的线程名称
-+		string thread_name = "frida-server-main-loop";
-+		if (FloridaEnhanced.ThreadNameObfuscator.is_enhanced_mode_enabled()) {
-+			thread_name = FloridaEnhanced.ThreadNameObfuscator.obfuscate_thread_name(thread_name);
-+		}
-+		var worker = new Thread<int> (thread_name, () => {
- 			var exit_code = run_application (device_id, endpoint_params, options, on_ready);
- 
- 			_stop_run_loop ();
 diff --git a/src/florida-enhanced.vala b/src/florida-enhanced.vala
 new file mode 100644
-index 0000000..2e41940
+index 0000000..bca5866
 --- /dev/null
 +++ b/src/florida-enhanced.vala
-@@ -0,0 +1,413 @@
+@@ -0,0 +1,342 @@
 +/**
-+ * Florida Enhanced: 企业级Frida反检测增强模块
++ * Florida Enhanced: Frida反检测增强模块
 + *
 + * 这个模块提供了完整的反检测功能集合，包括：
 + * - 符号名混淆
@@ -45,6 +26,7 @@ index 0000000..2e41940
 + * - 反检测集成
 + *
 + * 所有功能都支持环境变量和命令行参数控制
++ * 注意：RpcProtocolEnhancer已移至lib/base/rpc.vala中自包含实现
 + */
 +
 +namespace FloridaEnhanced {
@@ -65,7 +47,9 @@ index 0000000..2e41940
 +
 +		private static string[] symbol_suffixes = {
 +			"", "_impl", "_native", "_jni", "_internal", "_handler"
-+		};		// 检查是否启用增强模式
++		};
++
++		// 检查是否启用增强模式
 +		private static bool is_mode_enabled() {
 +			// 优先检查功能开关，如果明确设置则以功能开关为准
 +			string? symbol_mode = Environment.get_variable("FLORIDA_SYMBOL_MODE");
@@ -110,7 +94,9 @@ index 0000000..2e41940
 +
 +		private static string[] thread_suffixes = {
 +			"", "-1", "-2", "-pool", "-mgr", "-svc"
-+		};		// 检查是否启用增强模式
++		};
++
++		// 检查是否启用增强模式
 +		private static bool is_mode_enabled() {
 +			// 优先检查功能开关，如果明确设置则以功能开关为准
 +			string? thread_mode = Environment.get_variable("FLORIDA_THREAD_MODE");
@@ -169,7 +155,9 @@ index 0000000..2e41940
 +			// 功能开关未设置，检查全局开关 (默认启用)
 +			string? global_mode = Environment.get_variable("FLORIDA_MODE");
 +			return (global_mode != "0");
-+		}		// 生成混淆后的内存标识符
++		}
++
++		// 生成混淆后的内存标识符
 +		public static string obfuscate_memory_identifier(string original) {
 +			if (!is_mode_enabled()) {
 +				return original;
@@ -202,7 +190,9 @@ index 0000000..2e41940
 +
 +		private static string[] protocol_types = {
 +			"json", "binary", "text", "stream", "rpc", "api", "native", "custom"
-+		};		// 检查是否启用增强模式
++		};
++
++		// 检查是否启用增强模式
 +		private static bool is_mode_enabled() {
 +			// 优先检查功能开关，如果明确设置则以功能开关为准
 +			string? protocol_mode = Environment.get_variable("FLORIDA_PROTOCOL_MODE");
@@ -236,7 +226,9 @@ index 0000000..2e41940
 +		public static bool is_enhanced_mode_enabled() {
 +			return is_mode_enabled();
 +		}
-+	}	/**
++	}
++
++	/**
 +	 * Florida Enhanced: 库名生成器
 +	 */
 +	public class FloridaLibNameGenerator {
@@ -270,7 +262,9 @@ index 0000000..2e41940
 +		public static string generate_lib_name() {
 +			if (!is_mode_enabled()) {
 +				return "frida-agent";
-+			}			// 使用时间戳作为种子
++			}
++
++			// 使用时间戳作为种子
 +			uint32 seed = (uint32)(get_real_time() % 1000000);
 +			Random.set_seed(seed);
 +
@@ -304,7 +298,9 @@ index 0000000..2e41940
 +			uint suffix_num = Random.int_range(1, 999);
 +
 +			return prefix + "_" + component + "_" + suffix_num.to_string();
-+		}		// 统一的增强模式检查方法
++		}
++
++		// 统一的增强模式检查方法
 +		public static bool is_enhanced_mode_enabled() {
 +			return is_mode_enabled();
 +		}
@@ -341,7 +337,9 @@ index 0000000..2e41940
 +		public static string replace_detection_markers(string original) {
 +			if (!is_mode_enabled()) {
 +				return original;
-+			}			string result = original;
++			}
++
++			string result = original;
 +			
 +			// 遍历检测标记并替换
 +			for (int i = 0; i < detection_markers.length; i++) {
@@ -356,94 +354,6 @@ index 0000000..2e41940
 +		// 统一的增强模式检查方法
 +		public static bool is_enhanced_mode_enabled() {
 +			return is_mode_enabled();
-+		}
-+	}
-+
-+	/**
-+	 * Florida Enhanced: RPC协议增强器
-+	 */
-+	public class RpcProtocolEnhancer {
-+		private static HashTable<string, string>? _command_map = null;
-+		private static HashTable<string, string>? _reverse_map = null;
-+		private static bool _enhanced_mode_enabled = false;
-+
-+		// 检查是否启用增强模式
-+		private static bool is_mode_enabled() {
-+			// 优先检查功能开关，如果明确设置则以功能开关为准
-+			string? rpc_mode = Environment.get_variable("FLORIDA_RPC_MODE");
-+			if (rpc_mode != null) {
-+				return rpc_mode != "0";
-+			}
-+
-+			// 功能开关未设置，检查全局开关 (默认启用)
-+			string? global_mode = Environment.get_variable("FLORIDA_MODE");
-+			return (global_mode != "0");
-+		}		// 初始化增强器
-+		public static void init() {
-+			_enhanced_mode_enabled = is_mode_enabled();
-+
-+			// 避免重复初始化
-+			if (_command_map != null)
-+				return;
-+
-+			_command_map = new HashTable<string, string>(str_hash, str_equal);
-+			_reverse_map = new HashTable<string, string>(str_hash, str_equal);
-+
-+			// 基础协议标识符映射
-+			_command_map.insert("frida:rpc", "invoke:op");
-+			_command_map.insert("call", "exec");
-+			_command_map.insert("ok", "success");
-+
-+			// 创建反向映射
-+			var keys = _command_map.get_keys();
-+			foreach (var key in keys) {
-+				_reverse_map.insert(_command_map.get(key), key);
-+			}
-+		}
-+
-+		// 获取命令映射 (标准 -> 增强)
-+		public static string map_command(string cmd) {
-+			if (!_enhanced_mode_enabled)
-+				return cmd;
-+
-+			if (_command_map == null)
-+				init();
-+
-+			string? mapped = _command_map.lookup(cmd);
-+			return (mapped != null) ? mapped : cmd;
-+		}
-+
-+		// 获取命令反向映射 (增强 -> 标准)
-+		public static string reverse_map_command(string cmd) {
-+			if (!_enhanced_mode_enabled)
-+				return cmd;			if (_reverse_map == null)
-+				init();
-+
-+			string? mapped = _reverse_map.lookup(cmd);
-+			return (mapped != null) ? mapped : cmd;
-+		}
-+
-+		// 检测是否是已知的增强命令
-+		public static bool is_enhanced_command(string cmd) {
-+			if (_reverse_map == null)
-+				init();
-+
-+			return _reverse_map.contains(cmd);
-+		}
-+
-+		// 是否启用了增强模式
-+		public static bool is_enhanced_mode_enabled() {
-+			return _enhanced_mode_enabled;
-+		}
-+
-+		// 生成随机请求ID前缀，增加检测难度
-+		public static string generate_request_id_prefix() {
-+			if (!_enhanced_mode_enabled)
-+				return "";
-+
-+			string[] prefixes = {"req", "id", "op", "cmd", "task"};
-+			var random_index = Random.int_range(0, prefixes.length);
-+			return prefixes[random_index] + "_";
 +		}
 +	}
 +}

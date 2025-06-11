@@ -1,6 +1,6 @@
-From af4e2f441cce1fadabbf766d55023508cd08042e Mon Sep 17 00:00:00 2001
+From 06e1098754b0cdb1efa1dbef8ab48a70e9989fa5 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Wed, 11 Jun 2025 20:06:51 +0800
+Date: Thu, 12 Jun 2025 00:09:26 +0800
 Subject: [PATCH 004/004] Florida Enhanced: : 文件名混淆 动态生成仿操作系统的socket和文件路径
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH 004/004] Florida Enhanced: : 文件名混淆 动态生成仿操�
  2 files changed, 60 insertions(+), 2 deletions(-)
 
 diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backend.vala
-index 1bbe475..c86fb4b 100644
+index 1bbe475..6c6bccd 100644
 --- a/src/linux/frida-helper-backend.vala
 +++ b/src/linux/frida-helper-backend.vala
 @@ -1252,7 +1252,35 @@ namespace Frida {
@@ -30,7 +30,7 @@ index 1bbe475..c86fb4b 100644
 +			}
 +
 +			if (enhanced_enabled) {
-+				// Florida Enhanced: 生成逼真的socket名称
++				// Florida Enhanced: 生成系统仿真的socket名称
 +				string[] prefixes = {"sys", "android", "native", "service", "core", "base"};
 +				string[] components = {"sock", "ipc", "ctrl", "mgmt", "svc", "handler", "daemon", "worker"};
 +				
