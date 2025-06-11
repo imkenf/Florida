@@ -1,7 +1,7 @@
 From c656c8a3ffdcfcdaa9b1bdffd6cdfee6224498a4 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Wed, 11 Jun 2025 09:32:03 +0800
-Subject: [PATCH 004/004] Florida Enhanced: 004-filename-obfuscation
+Subject: [PATCH 004/004] Florida Enhanced: 004-filename-obfuscation-fixed
 
 ---
  src/linux/frida-helper-backend.vala | 18 +++++++++++++++++-
@@ -12,7 +12,12 @@ diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backen
 index 1bbe475..ecf26d9 100644
 --- a/src/linux/frida-helper-backend.vala
 +++ b/src/linux/frida-helper-backend.vala
-@@ -1252,7 +1252,23 @@ namespace Frida {
+@@ -1,3 +1,4 @@
++using Frida;
+ namespace Frida {
+ 	public class LinuxHelperBackend : Object, LinuxHelper {
+ 		public uint pid {
+@@ -1252,7 +1253,22 @@ namespace Frida {
  		}
  
  		private static string make_fallback_address () {
@@ -30,7 +35,7 @@ index 1bbe475..ecf26d9 100644
 +			}
 +
 +			if (enhanced_enabled) {
-+				return "/." + Frida.FloridaLibNameGenerator.generate_realistic_socket_name();
++				return "/." + FloridaLibNameGenerator.generate_realistic_socket_name();
 +			} else {
 +				return "/frida-" + Uuid.string_random ();
 +			}
@@ -41,7 +46,12 @@ diff --git a/src/linux/frida-helper-process.vala b/src/linux/frida-helper-proces
 index 9f41c88..ef24d50 100644
 --- a/src/linux/frida-helper-process.vala
 +++ b/src/linux/frida-helper-process.vala
-@@ -321,7 +321,25 @@ namespace Frida {
+@@ -1,3 +1,4 @@
++using Frida;
+ namespace Frida {
+ 	public class LinuxHelperProcess : Object {
+ 		public signal void uninjected (uint id);
+@@ -321,7 +322,24 @@ namespace Frida {
  			TimeoutSource? timeout_source = null;
  
  			try {
@@ -60,7 +70,7 @@ index 9f41c88..ef24d50 100644
 +				}
 +
 +				if (enhanced_enabled) {
-+					socket_path = "/." + Frida.FloridaLibNameGenerator.generate_realistic_socket_name();
++					socket_path = "/." + FloridaLibNameGenerator.generate_realistic_socket_name();
 +				} else {
 +					socket_path = "/frida-" + Uuid.string_random ();
 +				}
@@ -69,5 +79,4 @@ index 9f41c88..ef24d50 100644
  
  				service = new SocketService ();
 -- 
-2.45.1.windows.1
-
+2.45.1.windows.1 
