@@ -357,7 +357,6 @@ index 0000000..bca5866
 +		return is_mode_enabled();
 +	}
 +}
-\ No newline at end of file
 diff --git a/src/meson.build b/src/meson.build
 index 34a212a..a4456a7 100644
 --- a/src/meson.build
