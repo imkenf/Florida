@@ -1,15 +1,15 @@
-From 4f05cb60ce97660189962bfcf7ffca15e182848e Mon Sep 17 00:00:00 2001
-From: Kenf <imkenf@github.actions>
-Date: Sun, 08 Jun 2025 21:47:20 +0800
-Subject: [PATCH 001/004] Florida基础集成: 统一命令行参数和环境变量控制
+From 4cc4569001ecffbce1e03b0e12c3b65e16696da5 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Wed, 11 Jun 2025 09:30:47 +0800
+Subject: [PATCH 001/004] Florida Enhanced: 001-florida-base-integration
 
 ---
- server/server.vala |  73 +++++++++++++++++++++++++++++++++++++++++++++++++++
- src/system.vala    |  96 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 2 files changed, 169 insertions(+)
+ server/server.vala | 71 +++++++++++++++++++++++++++++++++-
+ src/system.vala    | 96 ++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 166 insertions(+), 1 deletion(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 412d598..f9c6842 100644
+index 67bf4b3..df0fde0 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -17,6 +17,16 @@ namespace Frida.Server {
@@ -112,7 +112,7 @@ index 412d598..f9c6842 100644
  
  			_stop_run_loop ();
 diff --git a/src/system.vala b/src/system.vala
-index a8e4f19..e2cd827 100644
+index 998ef8c..e2cd827 100644
 --- a/src/system.vala
 +++ b/src/system.vala
 @@ -1,4 +1,100 @@
@@ -217,4 +217,5 @@ index a8e4f19..e2cd827 100644
  		public extern static Frida.HostApplicationInfo get_frontmost_application (FrontmostQueryOptions options) throws Error;
  		public extern static Frida.HostApplicationInfo[] enumerate_applications (ApplicationQueryOptions options);
 -- 
-2.34.1
+2.45.1.windows.1
+

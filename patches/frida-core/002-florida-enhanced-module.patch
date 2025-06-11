@@ -1,17 +1,17 @@
-From f9c6842a8d3e7b1c4f5e9d2a6b8c3e7f1a4d9c5 Mon Sep 17 00:00:00 2001
-From: Kenf <imkenf@github.actions>
-Date: Tue, 08 Jan 2025 21:47:20 +0800
-Subject: [PATCH 002/004] Florida增强模块: 独立的增强功能模块文件
+From 262a7e80e80a79ca754989fbba9a01fd14e09929 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Wed, 11 Jun 2025 09:31:08 +0800
+Subject: [PATCH 002/004] Florida Enhanced: 002-florida-enhanced-module
 
 ---
- src/florida-enhanced.vala | 267 ++++++++++++++++++++++++++++++++++++++++++++++
+ src/florida-enhanced.vala | 267 ++++++++++++++++++++++++++++++++++++++
  src/meson.build           |   1 +
  2 files changed, 268 insertions(+)
  create mode 100644 src/florida-enhanced.vala
 
 diff --git a/src/florida-enhanced.vala b/src/florida-enhanced.vala
 new file mode 100644
-index 0000000..b8f3d21
+index 0000000..e40d2a9
 --- /dev/null
 +++ b/src/florida-enhanced.vala
 @@ -0,0 +1,267 @@
@@ -282,39 +282,11 @@ index 0000000..b8f3d21
 +				return original;
 +			}
 +
-+			string result = original;
-+			var now = new DateTime.now_local();
-+			var seed = (uint32)(now.to_unix() & 0xFFFFFFFF);
-+			Random.set_seed(seed);
-+
-+			// 替换检测标记
-+			for (int i = 0; i < detection_markers.length; i++) {
-+				string marker = detection_markers[i];
-+				if (result.contains(marker)) {
-+					string replacement = safe_alternatives[Random.int_range(0, safe_alternatives.length)];
-+					result = result.replace(marker, replacement);
-+				}
-+			}
-+
-+			return result;
-+		}
-+
-+		public static bool is_enhanced_mode_enabled() {
-+			return is_mode_enabled();
-+		}
-+	}
-+}
 diff --git a/src/meson.build b/src/meson.build
-index 412d598..7b4e5c9 100644
+index 34a212a..a4456a7 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -1,11 +1,12 @@
- base_sources = [
-   'frida.vala',
-   'frida-glue.c',
-   'control-service.vala',
-   'portal-service.vala',
-   'host-session-service.vala',
+@@ -7,6 +7,7 @@ base_sources = [
    'agent-container.vala',
    'gdb.vala',
    'system.vala',
@@ -323,4 +295,5 @@ index 412d598..7b4e5c9 100644
    'async-task.vala',
  ]
 -- 
-2.34.1
+2.45.1.windows.1
+

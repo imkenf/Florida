@@ -1,11 +1,15 @@
-From 9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5g6h7i8 Mon Sep 17 00:00:00 2001
-From: Kenf <imkenf@github.actions>
-Date: Sun, 08 Jun 2025 21:47:20 +0800
+From 55fc6581c6c047fab8e298587378033f40e1d0d4 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Wed, 11 Jun 2025 09:42:25 +0800
 Subject: [PATCH 001/001] GUM内存混淆: POSIX后端内存操作标识符隐藏
 
 ---
+ gum/backend-posix/gummemory-posix.c | 48 ++++++++++++++++++++++-
+ gum/gummemory.c                     | 61 +++++++++++++++++++++++++++++
+ 2 files changed, 108 insertions(+), 1 deletion(-)
+
 diff --git a/gum/backend-posix/gummemory-posix.c b/gum/backend-posix/gummemory-posix.c
-index 848b430a..48728536 100644
+index 848b430..4872853 100644
 --- a/gum/backend-posix/gummemory-posix.c
 +++ b/gum/backend-posix/gummemory-posix.c
 @@ -13,6 +13,47 @@
@@ -78,7 +82,7 @@ index 848b430a..48728536 100644
      return NULL;
  
 diff --git a/gum/gummemory.c b/gum/gummemory.c
-index 9ae97f17..f945a1a7 100644
+index 9ae97f1..f945a1a 100644
 --- a/gum/gummemory.c
 +++ b/gum/gummemory.c
 @@ -49,6 +49,46 @@
@@ -170,3 +174,6 @@ index 9ae97f17..f945a1a7 100644
    result = gum_try_alloc_n_pages (n_pages, prot);
    g_assert (result != NULL);
  
+-- 
+2.45.1.windows.1
+

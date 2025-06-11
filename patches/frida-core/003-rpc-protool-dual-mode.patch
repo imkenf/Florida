@@ -1,0 +1,245 @@
+From 6f998611878a02ae0b04ce86180cd3b1c90f8a3d Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Wed, 11 Jun 2025 09:35:51 +0800
+Subject: [PATCH 003/004] Florida Enhanced: 003-rpc-protocol-dual-mode
+
+---
+ lib/base/rpc.vala | 150 +++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 136 insertions(+), 14 deletions(-)
+
+diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
+index c465452..ca19a82 100644
+--- a/lib/base/rpc.vala
++++ b/lib/base/rpc.vala
+@@ -1,4 +1,105 @@
+ namespace Frida {
++	/**
++	 * Florida Enhanced: RPC协议增强器
++	 *
++	 * 环境变量控制:
++	 * - FLORIDA_MODE: 全局开关 (1=启用默认, 0=禁用)
++	 * - FLORIDA_RPC_MODE: RPC功能开关 (1=启用默认, 0=禁用)
++	 *
++	 * 命令行参数支持:
++	 * - frida-server --florida-mode=0     (禁用所有增强功能)
++	 * - frida-server --florida-rpc-mode=0 (只禁用RPC混淆)
++	 * - frida-server --no-florida         (快速禁用所有功能)
++	 */
++	public class RpcProtocolEnhancer {
++		private static HashTable<string, string>? _command_map = null;
++		private static HashTable<string, string>? _reverse_map = null;
++		private static bool _enhanced_mode_enabled = false;
++
++		// 检查是否启用增强模式
++		private static bool is_mode_enabled() {
++			// 优先检查功能开关，如果明确设置则以功能开关为准
++			string? rpc_mode = Environment.get_variable("FLORIDA_RPC_MODE");
++			if (rpc_mode != null) {
++				return rpc_mode != "0";
++			}
++
++			// 功能开关未设置，检查全局开关 (默认启用)
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			return (global_mode != "0");
++		}
++
++		// 初始化增强器
++		public static void init() {
++			_enhanced_mode_enabled = is_mode_enabled();
++
++			// 避免重复初始化
++			if (_command_map != null)
++				return;
++
++			_command_map = new HashTable<string, string>(str_hash, str_equal);
++			_reverse_map = new HashTable<string, string>(str_hash, str_equal);
++
++			// 基础协议标识符映射
++			_command_map.insert("frida:rpc", "invoke:op");
++			_command_map.insert("call", "exec");
++			_command_map.insert("ok", "success");
++
++			// 创建反向映射
++			var keys = _command_map.get_keys();
++			foreach (var key in keys) {
++				_reverse_map.insert(_command_map.get(key), key);
++			}
++		}
++
++		// 获取命令映射 (标准 -> 增强)
++		public static string map_command(string cmd) {
++			if (!_enhanced_mode_enabled)
++				return cmd;
++
++			if (_command_map == null)
++				init();
++
++			string? mapped = _command_map.lookup(cmd);
++			return (mapped != null) ? mapped : cmd;
++		}
++
++		// 获取命令反向映射 (增强 -> 标准)
++		public static string reverse_map_command(string cmd) {
++			if (!_enhanced_mode_enabled)
++				return cmd;
++
++			if (_reverse_map == null)
++				init();
++
++			string? mapped = _reverse_map.lookup(cmd);
++			return (mapped != null) ? mapped : cmd;
++		}
++
++		// 检测是否是已知的增强命令
++		public static bool is_enhanced_command(string cmd) {
++			if (_reverse_map == null)
++				init();
++
++			return _reverse_map.contains(cmd);
++		}
++
++		// 是否启用了增强模式
++		public static bool is_enhanced_mode_enabled() {
++			return _enhanced_mode_enabled;
++		}
++
++		// 生成随机请求ID前缀，增加检测难度
++		public static string generate_request_id_prefix() {
++			if (!_enhanced_mode_enabled)
++				return "";
++
++			string[] prefixes = {"req", "id", "op", "cmd", "task"};
++			var random_index = Random.int_range(0, prefixes.length);
++			return prefixes[random_index] + "_";
++		}
++	}
++
+ 	public sealed class RpcClient : Object {
+ 		public weak RpcPeer peer {
+ 			get;
+@@ -7,6 +108,12 @@ namespace Frida {
+ 
+ 		private Gee.HashMap<string, PendingResponse> pending_responses = new Gee.HashMap<string, PendingResponse> ();
+ 
++		// Florida Enhanced: 初始化RPC协议增强器
++		static construct {
++			// 初始化RPC协议增强器 (通过环境变量控制)
++			RpcProtocolEnhancer.init();
++		}
++
+ 		public RpcClient (RpcPeer peer) {
+ 			Object (peer: peer);
+ 		}
+@@ -14,12 +121,18 @@ namespace Frida {
+ 		public async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
+ 			string request_id = Uuid.string_random ();
+ 
++			// Florida Enhanced: 添加随机前缀到请求ID
++			string enhanced_request_id = RpcProtocolEnhancer.generate_request_id_prefix() + request_id;
++			// 实际发送的ID就是enhanced_request_id，用它作为pending_responses的键
++			string actual_request_id = RpcProtocolEnhancer.is_enhanced_mode_enabled() ? enhanced_request_id : request_id;
++
+ 			var request = new Json.Builder ();
+ 			request
+ 				.begin_array ()
+-				.add_string_value ("frida:rpc")
+-				.add_string_value (request_id)
+-				.add_string_value ("call")
++				// Florida Enhanced: 使用增强的协议标识符
++				.add_string_value (RpcProtocolEnhancer.map_command("frida:rpc"))
++				.add_string_value (actual_request_id)
++				.add_string_value (RpcProtocolEnhancer.map_command("call"))
+ 				.add_string_value (method)
+ 				.begin_array ();
+ 			foreach (var arg in args)
+@@ -27,28 +140,28 @@ namespace Frida {
+ 			request
+ 				.end_array ()
+ 				.end_array ();
++
+ 			string raw_request = Json.to_string (request.get_root (), false);
+ 
+ 			bool waiting = false;
+-
+ 			var pending = new PendingResponse (() => {
+ 				if (waiting)
+ 					call.callback ();
+ 				return false;
+ 			});
+-			pending_responses[request_id] = pending;
++			pending_responses[actual_request_id] = pending;
+ 
+ 			try {
+ 				yield peer.post_rpc_message (raw_request, data, cancellable);
+ 			} catch (Error e) {
+-				if (pending_responses.unset (request_id))
++				if (pending_responses.unset (actual_request_id))
+ 					pending.complete_with_error (e);
+ 			}
+ 
+ 			if (!pending.completed) {
+ 				var cancel_source = new CancellableSource (cancellable);
+ 				cancel_source.set_callback (() => {
+-					if (pending_responses.unset (request_id))
++					if (pending_responses.unset (actual_request_id))
+ 						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
+ 					return false;
+ 				});
+@@ -70,7 +183,10 @@ namespace Frida {
+ 		}
+ 
+ 		public bool try_handle_message (string json) {
+-			if (json.index_of ("\"frida:rpc\"") == -1)
++			// Florida Enhanced: 支持标准和增强协议标识符的检测
++			string standard_marker = "\"frida:rpc\"";
++			string enhanced_marker = "\"" + RpcProtocolEnhancer.map_command("frida:rpc") + "\"";
++			if (json.index_of (standard_marker) == -1 && json.index_of (enhanced_marker) == -1)
+ 				return false;
+ 
+ 			var parser = new Json.Parser ();
+@@ -82,9 +198,8 @@ namespace Frida {
+ 			var message = parser.get_root ().get_object ();
+ 
+ 			bool handled = false;
+-
+-			var type = message.get_string_member ("type");
+-			if (type == "send")
++			var msg_type = message.get_string_member ("type");
++			if (msg_type == "send")
+ 				handled = try_handle_rpc_message (message);
+ 
+ 			return handled;
+@@ -94,12 +209,17 @@ namespace Frida {
+ 			var payload = message.get_member ("payload");
+ 			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
+ 				return false;
++
+ 			var rpc_message = payload.get_array ();
++
+ 			if (rpc_message.get_length () < 4)
+ 				return false;
+ 
+-			string? type = rpc_message.get_element (0).get_string ();
+-			if (type == null || type != "frida:rpc")
++			string? type_raw = rpc_message.get_element (0).get_string ();
++			if (type_raw == null)
++				return false;
++			string type = RpcProtocolEnhancer.reverse_map_command(type_raw);
++			if (type != "frida:rpc")
+ 				return false;
+ 
+ 			var request_id_value = rpc_message.get_element (1);
+@@ -111,7 +231,9 @@ namespace Frida {
+ 			if (!pending_responses.unset (request_id, out response))
+ 				return false;
+ 
+-			var status = rpc_message.get_string_element (2);
++			var status_raw = rpc_message.get_string_element (2);
++			string status = RpcProtocolEnhancer.reverse_map_command(status_raw);
++
+ 			if (status == "ok")
+ 				response.complete_with_result (rpc_message.get_element (3));
+ 			else
+-- 
+2.45.1.windows.1
+

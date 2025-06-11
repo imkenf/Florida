@@ -1,7 +1,7 @@
-From 3a7b8d2e5f6c9a4d7e1b8c3f6d9a2e5c1b8d4a7 Mon Sep 17 00:00:00 2001
-From: Kenf <imkenf@github.actions>
-Date: Tue, 08 Jan 2025 21:47:20 +0800
-Subject: [PATCH 004/004] 文件名混淆: 动态生成逼真的socket和文件路径
+From c656c8a3ffdcfcdaa9b1bdffd6cdfee6224498a4 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Wed, 11 Jun 2025 09:32:03 +0800
+Subject: [PATCH 004/004] Florida Enhanced: 004-filename-obfuscation
 
 ---
  src/linux/frida-helper-backend.vala | 18 +++++++++++++++++-
@@ -9,7 +9,7 @@ Subject: [PATCH 004/004] 文件名混淆: 动态生成逼真的socket和文件�
  2 files changed, 36 insertions(+), 2 deletions(-)
 
 diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backend.vala
-index 3a7b8d2..c9f5e8a 100644
+index 1bbe475..ecf26d9 100644
 --- a/src/linux/frida-helper-backend.vala
 +++ b/src/linux/frida-helper-backend.vala
 @@ -1252,7 +1252,23 @@ namespace Frida {
@@ -38,7 +38,7 @@ index 3a7b8d2..c9f5e8a 100644
  
  		private Future<RemoteAgent> establish_connection (LoaderLaunch launch, InjectSpec spec, BootstrapResult bres,
 diff --git a/src/linux/frida-helper-process.vala b/src/linux/frida-helper-process.vala
-index c9f5e8a..b4d7c1f 100644
+index 9f41c88..ef24d50 100644
 --- a/src/linux/frida-helper-process.vala
 +++ b/src/linux/frida-helper-process.vala
 @@ -321,7 +321,25 @@ namespace Frida {
@@ -69,4 +69,5 @@ index c9f5e8a..b4d7c1f 100644
  
  				service = new SocketService ();
 -- 
-2.34.1
+2.45.1.windows.1
+
