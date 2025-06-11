@@ -1,0 +1,347 @@
+name: Florida Enhanced - Frida 16.7.19
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild even if release exists'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: ["main", "master"]
+    paths:
+      - ".github/workflows/build.yml"
+      - "patches/**"
+
+env:
+  FRIDA_VERSION: "16.7.19"
+  FLORIDA_VERSION: "v1.0"
+
+jobs: 
+  check_version:
+    runs-on: ubuntu-22.04
+    outputs:
+      FRIDA_VERSION: ${{ env.FRIDA_VERSION }}
+      FLORIDA_VERSION: ${{ env.FLORIDA_VERSION }}
+      ALREADY_RELEASE: ${{ steps.checkReleaseVersion.outputs.ALREADY_RELEASE }}
+    steps:
+      - name: Check release version
+        id: checkReleaseVersion
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            try {
+              const releaseTag = '${{ env.FRIDA_VERSION }}-${{ env.FLORIDA_VERSION }}'
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: releaseTag
+              });
+              
+              if ('${{ github.event.inputs.force_rebuild }}' === 'true' || '${{ github.event_name }}' === 'push') {
+                console.log('Force rebuild requested, will recreate release');
+                require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'ALREADY_RELEASE=2\n');
+              } else {
+                console.log('Release already exists, skipping build');
+                require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'ALREADY_RELEASE=1\n');
+              }
+            } catch (e) {
+              if(e.message.includes('Not Found')){
+                console.log('Release does not exist, proceeding with build');
+                require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'ALREADY_RELEASE=0\n');
+              } else {
+                core.setFailed(e.message);
+              }
+            }
+      
+      - name: Delete existing release
+        if: ${{ steps.checkReleaseVersion.outputs.ALREADY_RELEASE == '2' }}
+        uses: dev-drprasad/delete-tag-and-release@v1.1
+        with:
+          tag_name: ${{ env.FRIDA_VERSION }}-${{ env.FLORIDA_VERSION }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          delete_release: true
+
+  create_release:
+    needs: check_version
+    runs-on: ubuntu-22.04
+    if: needs.check_version.outputs.ALREADY_RELEASE != '1'
+    outputs:
+      upload_url: ${{ steps.createRelease.outputs.upload_url }}
+      release_id: ${{ steps.createRelease.outputs.id }}
+    steps:
+      - uses: softprops/action-gh-release@v2.1.0
+        id: createRelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FLORIDA_VERSION }}"
+          name: "Florida Enhanced ${{ needs.check_version.outputs.FRIDA_VERSION }} - ${{ needs.check_version.outputs.FLORIDA_VERSION }}"
+          body: |
+            # 🚀 Florida Enhanced for Frida ${{ needs.check_version.outputs.FRIDA_VERSION }}
+            
+            ## ✨ 增强特性
+            - RPC协议混淆、文件名混淆、符号名称混淆
+            - 线程名称伪装、内存标识符混淆
+            - 协议处理器增强、内置反检测集成
+            - GUM内存标识符混淆
+            
+            ## 🔧 控制方式
+            ```bash
+            # 环境变量控制
+            export FLORIDA_MODE=1  # 启用所有功能
+            export FLORIDA_MODE=0  # 标准模式
+            
+            # 命令行参数控制 (优先级最高)
+            frida-server --florida-mode=1
+            frida-server --florida-mode=0
+            ```
+            
+            ## 📦 使用方法
+            ```bash
+            # 下载并使用
+            wget https://github.com/${{ github.repository }}/releases/download/${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FLORIDA_VERSION }}/florida-enhanced-server-${{ needs.check_version.outputs.FRIDA_VERSION }}-android-arm64.gz
+            gunzip florida-enhanced-server-*.gz
+            adb push florida-enhanced-server-* /data/local/tmp/
+            adb shell chmod 755 /data/local/tmp/florida-enhanced-server-*
+            adb shell /data/local/tmp/florida-enhanced-server-* &
+            ```
+          prerelease: false
+          draft: false
+
+  android_build:
+    runs-on: ubuntu-22.04
+    needs: [check_version, create_release]
+    if: needs.check_version.outputs.ALREADY_RELEASE != '1'
+    strategy:
+      matrix:
+        arch: [android-arm, android-arm64, android-x86, android-x86_64]
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: "temurin"
+        java-version: "17"
+
+    - name: Setup Android NDK
+      id: setup-ndk
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        local-cache: false
+        link-to-sdk: true
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.11
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update && DEBIAN_FRONTEND=noninteractive sudo apt-get install \
+          build-essential ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev \
+          flex bison ruby ruby-dev python3-requests python3-setuptools python3-dev \
+          python3-pip libc6-dev libc6-dev-i386 git -y
+        sudo gem install fpm -v 1.11.0 --no-document
+
+    - name: Build Enhanced Frida for ${{ matrix.arch }}
+      shell: bash
+      env:
+        ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+      run: |
+        set -e  # 遇到错误立即退出
+        
+        # 配置git
+        git config --global user.name "Florida Enhanced Bot"
+        git config --global user.email "florida-enhanced@github.actions"
+        
+        echo "🚀 Building Florida Enhanced Frida ${{ env.FRIDA_VERSION }} for ${{ matrix.arch }}"
+        
+        # 克隆并切换到指定版本
+        git clone --recursive https://github.com/frida/frida.git
+        cd frida
+        git checkout ${{ env.FRIDA_VERSION }}
+        git submodule update --init --recursive
+        echo "✅ Frida ${{ env.FRIDA_VERSION }} ready ($(git describe --tags))"
+        
+        # 验证patches目录
+        if [[ ! -d "../patches" ]]; then
+          echo "❌ Patches directory not found!"
+          exit 1
+        fi
+        
+        # 应用frida-gum patches
+        echo "📦 Applying frida-gum patches..."
+        for patch in $(find ../patches/frida-gum -name "*.patch" | sort); do
+          patch_name=$(basename "$patch")
+          echo "🔄 Applying: $patch_name"
+          if ! (cd subprojects/frida-gum && git apply -v --reject -p1 < "../../../patches/frida-gum/$patch_name"); then
+            echo "❌ Failed to apply patch: $patch_name"
+            echo "🔍 Patch content:"
+            head -20 "$patch"
+            exit 1
+          fi
+          echo "✅ Applied: $patch_name"
+        done
+        
+        # 应用frida-core patches
+        echo "📦 Applying frida-core patches..."
+        for patch in $(find ../patches/frida-core -name "*.patch" | sort); do
+          patch_name=$(basename "$patch")
+          echo "🔄 Applying: $patch_name"
+          if ! (cd subprojects/frida-core && git apply -v --reject -p1 < "../../../patches/frida-core/$patch_name"); then
+            echo "❌ Failed to apply patch: $patch_name"
+            echo "🔍 Patch content:"
+            head -20 "$patch"
+            echo "🔍 Git status:"
+            (cd subprojects/frida-core && git status)
+            exit 1
+          fi
+          echo "✅ Applied: $patch_name"
+        done
+        
+        # 验证florida-enhanced.vala已正确添加到构建系统
+        if [[ -f "subprojects/frida-core/src/florida-enhanced.vala" ]]; then
+          if grep -q "florida-enhanced.vala" subprojects/frida-core/src/meson.build; then
+            echo "✅ florida-enhanced.vala is correctly added to build system"
+          else
+            echo "❌ florida-enhanced.vala not found in meson.build - patch may have failed"
+            exit 1
+          fi
+        fi
+        
+        echo "✅ All patches applied successfully"
+        
+        # 构建
+        echo "🔨 Building for ${{ matrix.arch }}..."
+        cd ..
+        mkdir -p build-${{ matrix.arch }}
+        cd build-${{ matrix.arch }}
+        
+        # 配置构建
+        if ! ../frida/configure --host=${{ matrix.arch }}; then
+          echo "❌ Configure failed for ${{ matrix.arch }}"
+          if [[ -f "../frida/releng/setup-env.sh" ]]; then
+            echo "🔄 Trying releng setup..."
+            source ../frida/releng/setup-env.sh
+            ../frida/configure --host=${{ matrix.arch }}
+          else
+            exit 1
+          fi
+        fi
+        
+        # 编译
+        echo "🔨 Compiling..."
+        if ! make -j$(nproc); then
+          echo "❌ Build failed, trying single-threaded..."
+          make -j1
+        fi
+        
+        # 验证构建产物
+        required_files=(
+          "./server/frida-server"
+          "./inject/frida-inject"
+          "./lib/gadget/frida-gadget.so"
+          "./lib/gumjs/libfrida-gumjs-1.0.a"
+        )
+        
+        for file in "${required_files[@]}"; do
+          if [[ ! -f "$file" ]]; then
+            echo "❌ Missing required file: $file"
+            exit 1
+          fi
+        done
+        
+        echo "✅ Build completed successfully for ${{ matrix.arch }}"
+
+    - name: Package build results
+      shell: bash
+      run: |
+        mkdir -p dist
+        
+        # 打包所有组件
+        cp ./build-${{ matrix.arch }}/server/frida-server ./dist/florida-enhanced-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
+        cp ./build-${{ matrix.arch }}/inject/frida-inject ./dist/florida-enhanced-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
+        cp ./build-${{ matrix.arch }}/lib/gadget/frida-gadget.so ./dist/florida-enhanced-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so
+        cp ./build-${{ matrix.arch }}/lib/gumjs/libfrida-gumjs-1.0.a ./dist/florida-enhanced-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
+        
+        # 压缩
+        gzip -9 ./dist/*
+        
+        # 创建符号链接用于上传
+        ln -sf ./dist/florida-enhanced-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz ./frida-server.gz
+        ln -sf ./dist/florida-enhanced-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz ./frida-inject.gz
+        ln -sf ./dist/florida-enhanced-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so.gz ./frida-gadget.so.gz
+        ln -sf ./dist/florida-enhanced-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a.gz ./libfrida-gumjs-1.0.a.gz
+
+    - name: Upload frida-server
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: './frida-server.gz'
+        asset_name: 'florida-enhanced-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz'
+        asset_content_type: application/gzip
+
+    - name: Upload frida-inject
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: './frida-inject.gz'
+        asset_name: 'florida-enhanced-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz'
+        asset_content_type: application/gzip
+
+    - name: Upload frida-gadget
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: './frida-gadget.so.gz'
+        asset_name: 'florida-enhanced-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so.gz'
+        asset_content_type: application/gzip
+
+    - name: Upload frida-gumjs
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: './libfrida-gumjs-1.0.a.gz'
+        asset_name: 'florida-enhanced-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a.gz'
+        asset_content_type: application/gzip
+
+  build_summary:
+    needs: [check_version, create_release, android_build]
+    runs-on: ubuntu-22.04
+    if: always()
+    steps:
+    - name: Build Summary
+      run: |
+        echo "🎉 Florida Enhanced Build Summary"
+        echo "================================="
+        echo "Frida Version: ${{ needs.check_version.outputs.FRIDA_VERSION }}"
+        echo "Florida Version: ${{ needs.check_version.outputs.FLORIDA_VERSION }}"
+        echo "Build Status: ${{ needs.android_build.result }}"
+        
+        if [[ "${{ needs.android_build.result }}" == "success" ]]; then
+          echo "✅ All architectures built successfully!"
+          echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FLORIDA_VERSION }}"
+        else
+          echo "❌ Build failed. Check logs for details."
+          exit 1
+        fi 

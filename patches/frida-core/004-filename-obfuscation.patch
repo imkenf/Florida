@@ -1,0 +1,72 @@
+From 3a7b8d2e5f6c9a4d7e1b8c3f6d9a2e5c1b8d4a7 Mon Sep 17 00:00:00 2001
+From: Kenf <imkenf@github.actions>
+Date: Tue, 08 Jan 2025 21:47:20 +0800
+Subject: [PATCH 004/004] 文件名混淆: 动态生成逼真的socket和文件路径
+
+---
+ src/linux/frida-helper-backend.vala | 18 +++++++++++++++++-
+ src/linux/frida-helper-process.vala | 20 +++++++++++++++++++-
+ 2 files changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backend.vala
+index 3a7b8d2..c9f5e8a 100644
+--- a/src/linux/frida-helper-backend.vala
++++ b/src/linux/frida-helper-backend.vala
+@@ -1252,7 +1252,23 @@ namespace Frida {
+ 		}
+ 
+ 		private static string make_fallback_address () {
+-			return "/frida-" + Uuid.string_random ();
++			// Florida Enhanced: 生成逼真的socket地址名称
++			// 优先检查功能开关，如果明确设置则以功能开关为准
++			string? file_mode = Environment.get_variable("FLORIDA_FILE_MODE");
++			bool enhanced_enabled;
++			if (file_mode != null) {
++				enhanced_enabled = (file_mode != "0");
++			} else {
++				// 功能开关未设置，检查全局开关 (默认启用)
++				string? global_mode = Environment.get_variable("FLORIDA_MODE");
++				enhanced_enabled = (global_mode != "0");
++			}
++
++			if (enhanced_enabled) {
++				return "/." + Frida.FloridaLibNameGenerator.generate_realistic_socket_name();
++			} else {
++				return "/frida-" + Uuid.string_random ();
++			}
+ 		}
+ 
+ 		private Future<RemoteAgent> establish_connection (LoaderLaunch launch, InjectSpec spec, BootstrapResult bres,
+diff --git a/src/linux/frida-helper-process.vala b/src/linux/frida-helper-process.vala
+index c9f5e8a..b4d7c1f 100644
+--- a/src/linux/frida-helper-process.vala
++++ b/src/linux/frida-helper-process.vala
+@@ -321,7 +321,25 @@ namespace Frida {
+ 			TimeoutSource? timeout_source = null;
+ 
+ 			try {
+-				string socket_path = "/frida-" + Uuid.string_random ();
++				// Florida Enhanced: 使用逼真的socket路径
++				string socket_path;
++				// 优先检查功能开关，如果明确设置则以功能开关为准
++				string? file_mode = Environment.get_variable("FLORIDA_FILE_MODE");
++				bool enhanced_enabled;
++				if (file_mode != null) {
++					enhanced_enabled = (file_mode != "0");
++				} else {
++					// 功能开关未设置，检查全局开关 (默认启用)
++					string? global_mode = Environment.get_variable("FLORIDA_MODE");
++					enhanced_enabled = (global_mode != "0");
++				}
++
++				if (enhanced_enabled) {
++					socket_path = "/." + Frida.FloridaLibNameGenerator.generate_realistic_socket_name();
++				} else {
++					socket_path = "/frida-" + Uuid.string_random ();
++				}
++
+ 				string socket_address = "unix:abstract=" + socket_path;
+ 
+ 				service = new SocketService ();
+-- 
+2.34.1

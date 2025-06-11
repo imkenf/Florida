@@ -1,0 +1,220 @@
+From 4f05cb60ce97660189962bfcf7ffca15e182848e Mon Sep 17 00:00:00 2001
+From: Kenf <imkenf@github.actions>
+Date: Sun, 08 Jun 2025 21:47:20 +0800
+Subject: [PATCH 001/004] Florida基础集成: 统一命令行参数和环境变量控制
+
+---
+ server/server.vala |  73 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/system.vala    |  96 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 169 insertions(+)
+
+diff --git a/server/server.vala b/server/server.vala
+index 412d598..f9c6842 100644
+--- a/server/server.vala
++++ b/server/server.vala
+@@ -17,6 +17,16 @@ namespace Frida.Server {
+ 	private static bool enable_preload = true;
+ 	private static bool report_crashes = true;
+ 	private static bool verbose = false;
++	// Florida Enhanced: 统一的增强功能命令行参数支持
++	private static string? florida_mode_str = null;
++	private static string? florida_rpc_mode_str = null;
++	private static string? florida_file_mode_str = null;
++	private static string? florida_symbol_mode_str = null;
++	private static string? florida_thread_mode_str = null;
++	private static string? florida_memory_mode_str = null;
++	private static string? florida_protocol_mode_str = null;
++	private static string? florida_builtin_mode_str = null;
++	private static bool no_florida = false;
+ 
+ 	private enum PolicySoftenerFlavor {
+ 		SYSTEM,
+@@ -48,6 +58,15 @@ namespace Frida.Server {
+ 		{ "ignore-crashes", 'C', OptionFlags.REVERSE, OptionArg.NONE, ref report_crashes,
+ 			"Disable native crash reporter integration", null },
+ 		{ "verbose", 'v', 0, OptionArg.NONE, ref verbose, "Be verbose", null },
++		{ "florida-mode", 0, 0, OptionArg.STRING, ref florida_mode_str, "Enable/disable all Florida enhanced features (1/0)", "ENABLE" },
++		{ "florida-rpc-mode", 0, 0, OptionArg.STRING, ref florida_rpc_mode_str, "Enable/disable RPC protocol obfuscation (1/0)", "ENABLE" },
++		{ "florida-file-mode", 0, 0, OptionArg.STRING, ref florida_file_mode_str, "Enable/disable filename obfuscation (1/0)", "ENABLE" },
++		{ "florida-symbol-mode", 0, 0, OptionArg.STRING, ref florida_symbol_mode_str, "Enable/disable symbol name obfuscation (1/0)", "ENABLE" },
++		{ "florida-thread-mode", 0, 0, OptionArg.STRING, ref florida_thread_mode_str, "Enable/disable thread name obfuscation (1/0)", "ENABLE" },
++		{ "florida-memory-mode", 0, 0, OptionArg.STRING, ref florida_memory_mode_str, "Enable/disable memory identifier obfuscation (1/0)", "ENABLE" },
++		{ "florida-protocol-mode", 0, 0, OptionArg.STRING, ref florida_protocol_mode_str, "Enable/disable protocol handler enhancement (1/0)", "ENABLE" },
++		{ "florida-builtin-mode", 0, 0, OptionArg.STRING, ref florida_builtin_mode_str, "Enable/disable builtin anti-detection integration (1/0)", "ENABLE" },
++		{ "no-florida", 0, 0, OptionArg.NONE, ref no_florida, "Disable all Florida enhanced features", null },
+ 		{ null }
+ 	};
+ 
+@@ -78,6 +97,51 @@ namespace Frida.Server {
+ 
+ 		Environment.set_verbose_logging_enabled (verbose);
+ 
++		// Florida Enhanced: 处理所有增强功能命令行参数并设置对应的环境变量
++		if (no_florida) {
++			// --no-florida 快速禁用所有功能
++			Environment.set_variable ("FLORIDA_MODE", "0", true);
++		} else {
++			// 处理具体的开关参数
++			if (florida_mode_str != null) {
++				Environment.set_variable ("FLORIDA_MODE", florida_mode_str, true);
++			}
++			if (florida_rpc_mode_str != null) {
++				Environment.set_variable ("FLORIDA_RPC_MODE", florida_rpc_mode_str, true);
++			}
++			if (florida_file_mode_str != null) {
++				Environment.set_variable ("FLORIDA_FILE_MODE", florida_file_mode_str, true);
++			}
++			if (florida_symbol_mode_str != null) {
++				Environment.set_variable ("FLORIDA_SYMBOL_MODE", florida_symbol_mode_str, true);
++			}
++			if (florida_thread_mode_str != null) {
++				Environment.set_variable ("FLORIDA_THREAD_MODE", florida_thread_mode_str, true);
++			}
++			if (florida_memory_mode_str != null) {
++				Environment.set_variable ("FLORIDA_MEMORY_MODE", florida_memory_mode_str, true);
++			}
++			if (florida_protocol_mode_str != null) {
++				Environment.set_variable ("FLORIDA_PROTOCOL_MODE", florida_protocol_mode_str, true);
++			}
++			if (florida_builtin_mode_str != null) {
++				Environment.set_variable ("FLORIDA_BUILTIN_MODE", florida_builtin_mode_str, true);
++			}
++		}
++
++		// 调试信息输出 (仅在详细模式下)
++		if (verbose) {
++			stdout.printf ("Florida Enhanced Configuration:\n");
++			stdout.printf ("  Global mode: %s\n", Environment.get_variable ("FLORIDA_MODE") ?? "default(1)");
++			stdout.printf ("  RPC mode: %s\n", Environment.get_variable ("FLORIDA_RPC_MODE") ?? "default(1)");
++			stdout.printf ("  File mode: %s\n", Environment.get_variable ("FLORIDA_FILE_MODE") ?? "default(1)");
++			stdout.printf ("  Symbol mode: %s\n", Environment.get_variable ("FLORIDA_SYMBOL_MODE") ?? "default(1)");
++			stdout.printf ("  Thread mode: %s\n", Environment.get_variable ("FLORIDA_THREAD_MODE") ?? "default(1)");
++			stdout.printf ("  Memory mode: %s\n", Environment.get_variable ("FLORIDA_MEMORY_MODE") ?? "default(1)");
++			stdout.printf ("  Protocol mode: %s\n", Environment.get_variable ("FLORIDA_PROTOCOL_MODE") ?? "default(1)");
++			stdout.printf ("  Builtin mode: %s\n", Environment.get_variable ("FLORIDA_BUILTIN_MODE") ?? "default(1)");
++		}
++
+ 		EndpointParameters endpoint_params;
+ 		try {
+ 			endpoint_params = new EndpointParameters (listen_address, 0, parse_certificate (certpath), origin,
+@@ -179,7 +243,12 @@ namespace Frida.Server {
+ 		Environment.configure ();
+ 
+ #if DARWIN
+-		var worker = new Thread<int> ("frida-server-main-loop", () => {
++		// Florida Enhanced: 使用混淆的线程名称
++		string thread_name = "frida-server-main-loop";
++		if (Frida.ThreadNameObfuscator.is_enhanced_mode_enabled()) {
++			thread_name = Frida.ThreadNameObfuscator.obfuscate_thread_name(thread_name);
++		}
++		var worker = new Thread<int> (thread_name, () => {
+ 			var exit_code = run_application (device_id, endpoint_params, options, on_ready);
+ 
+ 			_stop_run_loop ();
+diff --git a/src/system.vala b/src/system.vala
+index a8e4f19..e2cd827 100644
+--- a/src/system.vala
++++ b/src/system.vala
+@@ -1,4 +1,100 @@
+ namespace Frida {
++	/**
++	 * Florida Enhanced: 智能文件名和路径生成器
++	 *
++	 * 环境变量控制:
++	 * - FLORIDA_MODE: 全局开关 (1=启用默认, 0=禁用)
++	 * - FLORIDA_FILE_MODE: 文件名功能开关 (1=启用默认, 0=禁用)
++	 *
++	 * 命令行参数支持:
++	 * - frida-server --florida-file-mode=0 (只禁用文件名混淆)
++	 */
++	public class FloridaLibNameGenerator {
++		private static string[] lib_prefixes = {
++			"lib", "android", "system", "native", "core", "base", "util"
++		};
++
++		private static string[] lib_components = {
++			"runtime", "service", "manager", "utils", "core", "base",
++			"platform", "hardware", "framework", "engine", "graphics",
++			"network", "media", "audio", "video", "input", "display",
++			"content", "resource", "storage", "device", "provider",
++			"process", "memory", "data", "security", "crypto", "native",
++			"binding", "interface", "bridge", "wrapper", "client", "server"
++		};
++
++		private static string[] lib_suffixes = {
++			"", "impl", "service", "handler", "manager", "provider", "native"
++		};
++
++		// 检查是否启用增强模式
++		private static bool is_mode_enabled() {
++			// 优先检查功能开关，如果明确设置则以功能开关为准
++			string? file_mode = Environment.get_variable("FLORIDA_FILE_MODE");
++			if (file_mode != null) {
++				return file_mode != "0";
++			}
++
++			// 功能开关未设置，检查全局开关 (默认启用)
++			string? global_mode = Environment.get_variable("FLORIDA_MODE");
++			return (global_mode != "0");
++		}
++
++		public static string generate_realistic_lib_name() {
++			// 生成随机种子
++			var now = new DateTime.now_local();
++			var seed = (uint32)(now.to_unix() & 0xFFFFFFFF);
++			Random.set_seed(seed ^ (uint32)Posix.getpid());
++
++			// 选择前缀
++			string prefix = lib_prefixes[Random.int_range(0, lib_prefixes.length)];
++
++			// 选择1-2个主组件
++			string middle = lib_components[Random.int_range(0, lib_components.length)];
++			if (Random.boolean()) {
++				middle += "_" + lib_components[Random.int_range(0, lib_components.length)];
++			}
++
++			// 可能添加后缀
++			string suffix = lib_suffixes[Random.int_range(0, lib_suffixes.length)];
++			if (suffix != "") {
++				middle += "_" + suffix;
++			}
++
++			return prefix + middle;
++		}
++
++		public static string generate_realistic_socket_name() {
++			string[] socket_prefixes = {
++				"sys", "android", "native", "service", "core", "base"
++			};
++
++			string[] socket_components = {
++				"sock", "ipc", "ctrl", "mgmt", "svc", "handler",
++				"bridge", "proxy", "daemon", "worker", "helper",
++				"monitor", "tracker", "logger", "notifier"
++			};
++
++			// 使用当前时间和进程ID作为随机种子
++			var now = new DateTime.now_local();
++			var seed = (uint32)(now.to_unix() & 0xFFFFFFFF);
++			Random.set_seed(seed ^ (uint32)Posix.getpid() ^ (uint32)now.to_microsecond());
++
++			string prefix = socket_prefixes[Random.int_range(0, socket_prefixes.length)];
++			string component = socket_components[Random.int_range(0, socket_components.length)];
++
++			// 添加一些随机数字后缀，但保持看起来真实
++			uint suffix_num = Random.int_range(1, 999);
++
++			return prefix + "_" + component + "_" + suffix_num.to_string();
++		}
++
++		// 统一的增强模式检查方法
++		public static bool is_enhanced_mode_enabled() {
++			return is_mode_enabled();
++		}
++	}
++
+ 	namespace System {
+ 		public extern static Frida.HostApplicationInfo get_frontmost_application (FrontmostQueryOptions options) throws Error;
+ 		public extern static Frida.HostApplicationInfo[] enumerate_applications (ApplicationQueryOptions options);
+-- 
+2.34.1
