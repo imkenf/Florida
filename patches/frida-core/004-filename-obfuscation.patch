@@ -1,7 +1,7 @@
-From d6b7bf900dc8f5f923aa9b601427e49e58018a93 Mon Sep 17 00:00:00 2001
+From af4e2f441cce1fadabbf766d55023508cd08042e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Wed, 11 Jun 2025 16:37:45 +0800
-Subject: [PATCH 004/004] Florida Enhanced: 004-filename-obfuscation-standalone
+Date: Wed, 11 Jun 2025 20:06:51 +0800
+Subject: [PATCH 004/004] Florida Enhanced: : 文件名混淆 动态生成仿操作系统的socket和文件路径
 
 ---
  src/linux/frida-helper-backend.vala | 30 ++++++++++++++++++++++++++-
