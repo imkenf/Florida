@@ -4,9 +4,9 @@ Date: Thu, 12 Jun 2025 00:05:23 +0800
 Subject: [PATCH 002/004] Florida Enhanced: 增强功能模块集合文件
 
 ---
- src/florida-enhanced.vala | 342 ++++++++++++++++++++++++++++++++++++++
+ src/florida-enhanced.vala | 328 ++++++++++++++++++++++++++++++++++++++
  src/meson.build           |   1 +
- 2 files changed, 343 insertions(+)
+ 2 files changed, 329 insertions(+)
  create mode 100644 src/florida-enhanced.vala
 
 diff --git a/src/florida-enhanced.vala b/src/florida-enhanced.vala
@@ -14,7 +14,7 @@ new file mode 100644
 index 0000000..bca5866
 --- /dev/null
 +++ b/src/florida-enhanced.vala
-@@ -0,0 +1,342 @@
+@@ -0,0 +1,328 @@
 +/**
 + * Florida Enhanced: Frida反检测增强模块
 + *
@@ -27,334 +27,334 @@ index 0000000..bca5866
 + *
 + * 所有功能都支持环境变量和命令行参数控制
 + * 注意：RpcProtocolEnhancer已移至lib/base/rpc.vala中自包含实现
++ * 
++ * 修复：移除FloridaEnhanced命名空间以支持GIR格式
 + */
 +
-+namespace FloridaEnhanced {
-+	/**
-+	 * Florida Enhanced: 符号名混淆器
-+	 */
-+	public class SymbolObfuscator {
-+		private static string[] symbol_prefixes = {
-+			"_lib", "_sys", "_core", "_util", "_base", "_native", "_android"
-+		};
++/**
++ * Florida Enhanced: 符号名混淆器
++ */
++public class FloridaSymbolObfuscator {
++	private static string[] symbol_prefixes = {
++		"_lib", "_sys", "_core", "_util", "_base", "_native", "_android"
++	};
 +
-+		private static string[] symbol_components = {
-+			"init", "start", "stop", "create", "destroy", "alloc", "free",
-+			"open", "close", "read", "write", "send", "recv", "connect",
-+			"bind", "listen", "accept", "process", "handle", "execute",
-+			"invoke", "call", "return", "exit", "main", "entry", "cleanup"
-+		};
++	private static string[] symbol_components = {
++		"init", "start", "stop", "create", "destroy", "alloc", "free",
++		"open", "close", "read", "write", "send", "recv", "connect",
++		"bind", "listen", "accept", "process", "handle", "execute",
++		"invoke", "call", "return", "exit", "main", "entry", "cleanup"
++	};
 +
-+		private static string[] symbol_suffixes = {
-+			"", "_impl", "_native", "_jni", "_internal", "_handler"
-+		};
++	private static string[] symbol_suffixes = {
++		"", "_impl", "_native", "_jni", "_internal", "_handler"
++	};
 +
-+		// 检查是否启用增强模式
-+		private static bool is_mode_enabled() {
-+			// 优先检查功能开关，如果明确设置则以功能开关为准
-+			string? symbol_mode = Environment.get_variable("FLORIDA_SYMBOL_MODE");
-+			if (symbol_mode != null) {
-+				return symbol_mode != "0";
-+			}
-+
-+			// 功能开关未设置，检查全局开关 (默认启用)
-+			string? global_mode = Environment.get_variable("FLORIDA_MODE");
-+			return (global_mode != "0");
++	// 检查是否启用增强模式
++	private static bool is_mode_enabled() {
++		// 优先检查功能开关，如果明确设置则以功能开关为准
++		string? symbol_mode = Environment.get_variable("FLORIDA_SYMBOL_MODE");
++		if (symbol_mode != null) {
++			return symbol_mode != "0";
 +		}
 +
-+		// 生成混淆后的符号名
-+		public static string obfuscate_symbol(string original) {
-+			if (!is_mode_enabled()) {
-+				return original;
-+			}
-+
-+			// 使用时间戳和原始字符串哈希作为种子
-+			uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
-+			Random.set_seed(seed);
-+
-+			string prefix = symbol_prefixes[Random.int_range(0, symbol_prefixes.length)];
-+			string component = symbol_components[Random.int_range(0, symbol_components.length)];
-+			string suffix = symbol_suffixes[Random.int_range(0, symbol_suffixes.length)];
-+
-+			return prefix + component + suffix;
-+		}
++		// 功能开关未设置，检查全局开关 (默认启用)
++		string? global_mode = Environment.get_variable("FLORIDA_MODE");
++		return (global_mode != "0");
 +	}
 +
-+	/**
-+	 * Florida Enhanced: 线程名混淆器
-+	 */
-+	public class ThreadNameObfuscator {
-+		private static string[] thread_prefixes = {
-+			"thread", "worker", "task", "job", "service", "handler", "process"
-+		};
-+
-+		private static string[] thread_components = {
-+			"main", "bg", "io", "net", "ui", "core", "util", "sys"
-+		};
-+
-+		private static string[] thread_suffixes = {
-+			"", "-1", "-2", "-pool", "-mgr", "-svc"
-+		};
-+
-+		// 检查是否启用增强模式
-+		private static bool is_mode_enabled() {
-+			// 优先检查功能开关，如果明确设置则以功能开关为准
-+			string? thread_mode = Environment.get_variable("FLORIDA_THREAD_MODE");
-+			if (thread_mode != null) {
-+				return thread_mode != "0";
-+			}
-+
-+			// 功能开关未设置，检查全局开关 (默认启用)
-+			string? global_mode = Environment.get_variable("FLORIDA_MODE");
-+			return (global_mode != "0");
++	// 生成混淆后的符号名
++	public static string obfuscate_symbol(string original) {
++		if (!is_mode_enabled()) {
++			return original;
 +		}
 +
-+		// 生成混淆后的线程名
-+		public static string obfuscate_thread_name(string original) {
-+			if (!is_mode_enabled()) {
-+				return original;
-+			}
++		// 使用时间戳和原始字符串哈希作为种子
++		uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
++		Random.set_seed(seed);
 +
-+			// 使用时间戳和原始字符串哈希作为种子
-+			uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
-+			Random.set_seed(seed);
++		string prefix = symbol_prefixes[Random.int_range(0, symbol_prefixes.length)];
++		string component = symbol_components[Random.int_range(0, symbol_components.length)];
++		string suffix = symbol_suffixes[Random.int_range(0, symbol_suffixes.length)];
 +
-+			string prefix = thread_prefixes[Random.int_range(0, thread_prefixes.length)];
-+			string component = thread_components[Random.int_range(0, thread_components.length)];
-+			string suffix = thread_suffixes[Random.int_range(0, thread_suffixes.length)];
++		return prefix + component + suffix;
++	}
++}
 +
-+			return prefix + "-" + component + suffix;
++/**
++ * Florida Enhanced: 线程名混淆器
++ */
++public class FloridaThreadNameObfuscator {
++	private static string[] thread_prefixes = {
++		"thread", "worker", "task", "job", "service", "handler", "process"
++	};
++
++	private static string[] thread_components = {
++		"main", "bg", "io", "net", "ui", "core", "util", "sys"
++	};
++
++	private static string[] thread_suffixes = {
++		"", "-1", "-2", "-pool", "-mgr", "-svc"
++	};
++
++	// 检查是否启用增强模式
++	private static bool is_mode_enabled() {
++		// 优先检查功能开关，如果明确设置则以功能开关为准
++		string? thread_mode = Environment.get_variable("FLORIDA_THREAD_MODE");
++		if (thread_mode != null) {
++			return thread_mode != "0";
 +		}
 +
-+		// 统一的增强模式检查方法
-+		public static bool is_enhanced_mode_enabled() {
-+			return is_mode_enabled();
-+		}
++		// 功能开关未设置，检查全局开关 (默认启用)
++		string? global_mode = Environment.get_variable("FLORIDA_MODE");
++		return (global_mode != "0");
 +	}
 +
-+	/**
-+	 * Florida Enhanced: 内存混淆器
-+	 */
-+	public class MemoryObfuscator {
-+		private static string[] memory_identifiers = {
-+			"heap", "stack", "code", "data", "bss", "rodata", "text", "segment"
-+		};
-+
-+		private static string[] memory_prefixes = {
-+			"mem", "buf", "ptr", "addr", "reg", "zone", "area", "space"
-+		};
-+
-+		// 检查是否启用增强模式
-+		private static bool is_mode_enabled() {
-+			// 优先检查功能开关，如果明确设置则以功能开关为准
-+			string? memory_mode = Environment.get_variable("FLORIDA_MEMORY_MODE");
-+			if (memory_mode != null) {
-+				return memory_mode != "0";
-+			}
-+
-+			// 功能开关未设置，检查全局开关 (默认启用)
-+			string? global_mode = Environment.get_variable("FLORIDA_MODE");
-+			return (global_mode != "0");
++	// 生成混淆后的线程名
++	public static string obfuscate_thread_name(string original) {
++		if (!is_mode_enabled()) {
++			return original;
 +		}
 +
-+		// 生成混淆后的内存标识符
-+		public static string obfuscate_memory_identifier(string original) {
-+			if (!is_mode_enabled()) {
-+				return original;
-+			}
++		// 使用时间戳和原始字符串哈希作为种子
++		uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
++		Random.set_seed(seed);
 +
-+			// 使用时间戳和原始字符串哈希作为种子
-+			uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
-+			Random.set_seed(seed);
++		string prefix = thread_prefixes[Random.int_range(0, thread_prefixes.length)];
++		string component = thread_components[Random.int_range(0, thread_components.length)];
++		string suffix = thread_suffixes[Random.int_range(0, thread_suffixes.length)];
 +
-+			string prefix = memory_prefixes[Random.int_range(0, memory_prefixes.length)];
-+			string identifier = memory_identifiers[Random.int_range(0, memory_identifiers.length)];
-+			int number = Random.int_range(1, 100);
-+
-+			return prefix + "_" + identifier + "_" + number.to_string();
-+		}
-+
-+		// 统一的增强模式检查方法
-+		public static bool is_enhanced_mode_enabled() {
-+			return is_mode_enabled();
-+		}
++		return prefix + "-" + component + suffix;
 +	}
 +
-+	/**
-+	 * Florida Enhanced: 协议增强器
-+	 */
-+	public class ProtocolEnhancer {
-+		private static string[] protocol_prefixes = {
-+			"proto", "msg", "cmd", "req", "resp", "data", "packet", "frame"
-+		};
++	// 统一的增强模式检查方法
++	public static bool is_enhanced_mode_enabled() {
++		return is_mode_enabled();
++	}
++}
 +
-+		private static string[] protocol_types = {
-+			"json", "binary", "text", "stream", "rpc", "api", "native", "custom"
-+		};
++/**
++ * Florida Enhanced: 内存混淆器
++ */
++public class FloridaMemoryObfuscator {
++	private static string[] memory_identifiers = {
++		"heap", "stack", "code", "data", "bss", "rodata", "text", "segment"
++	};
 +
-+		// 检查是否启用增强模式
-+		private static bool is_mode_enabled() {
-+			// 优先检查功能开关，如果明确设置则以功能开关为准
-+			string? protocol_mode = Environment.get_variable("FLORIDA_PROTOCOL_MODE");
-+			if (protocol_mode != null) {
-+				return protocol_mode != "0";
-+			}
++	private static string[] memory_prefixes = {
++		"mem", "buf", "ptr", "addr", "reg", "zone", "area", "space"
++	};
 +
-+			// 功能开关未设置，检查全局开关 (默认启用)
-+			string? global_mode = Environment.get_variable("FLORIDA_MODE");
-+			return (global_mode != "0");
++	// 检查是否启用增强模式
++	private static bool is_mode_enabled() {
++		// 优先检查功能开关，如果明确设置则以功能开关为准
++		string? memory_mode = Environment.get_variable("FLORIDA_MEMORY_MODE");
++		if (memory_mode != null) {
++			return memory_mode != "0";
 +		}
 +
-+		// 生成混淆后的协议标识符
-+		public static string obfuscate_protocol_identifier(string original) {
-+			if (!is_mode_enabled()) {
-+				return original;
-+			}
-+
-+			// 使用时间戳和原始字符串哈希作为种子
-+			uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
-+			Random.set_seed(seed);
-+
-+			string prefix = protocol_prefixes[Random.int_range(0, protocol_prefixes.length)];
-+			string type = protocol_types[Random.int_range(0, protocol_types.length)];
-+			int version = Random.int_range(1, 10);
-+
-+			return prefix + "_" + type + "_v" + version.to_string();
-+		}
-+
-+		// 统一的增强模式检查方法
-+		public static bool is_enhanced_mode_enabled() {
-+			return is_mode_enabled();
-+		}
++		// 功能开关未设置，检查全局开关 (默认启用)
++		string? global_mode = Environment.get_variable("FLORIDA_MODE");
++		return (global_mode != "0");
 +	}
 +
-+	/**
-+	 * Florida Enhanced: 库名生成器
-+	 */
-+	public class FloridaLibNameGenerator {
-+		private static string[] lib_prefixes = {
-+			"lib", "android", "system", "native", "core", "runtime"
-+		};
-+
-+		private static string[] lib_components = {
-+			"utils", "service", "manager", "handler", "process", "thread",
-+			"memory", "network", "security", "crypto", "media", "graphics"
-+		};
-+
-+		private static string[] lib_suffixes = {
-+			"", "_native", "_jni", "_impl", "_core", "_base"
-+		};
-+
-+		// 检查是否启用增强模式
-+		private static bool is_mode_enabled() {
-+			// 优先检查功能开关，如果明确设置则以功能开关为准
-+			string? file_mode = Environment.get_variable("FLORIDA_FILE_MODE");
-+			if (file_mode != null) {
-+				return file_mode != "0";
-+			}
-+
-+			// 功能开关未设置，检查全局开关 (默认启用)
-+			string? global_mode = Environment.get_variable("FLORIDA_MODE");
-+			return (global_mode != "0");
++	// 生成混淆后的内存标识符
++	public static string obfuscate_memory_identifier(string original) {
++		if (!is_mode_enabled()) {
++			return original;
 +		}
 +
-+		// 生成仿真的库名
-+		public static string generate_lib_name() {
-+			if (!is_mode_enabled()) {
-+				return "frida-agent";
-+			}
++		// 使用时间戳和原始字符串哈希作为种子
++		uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
++		Random.set_seed(seed);
 +
-+			// 使用时间戳作为种子
-+			uint32 seed = (uint32)(get_real_time() % 1000000);
-+			Random.set_seed(seed);
++		string prefix = memory_prefixes[Random.int_range(0, memory_prefixes.length)];
++		string identifier = memory_identifiers[Random.int_range(0, memory_identifiers.length)];
++		int number = Random.int_range(1, 100);
 +
-+			string prefix = lib_prefixes[Random.int_range(0, lib_prefixes.length)];
-+			string component = lib_components[Random.int_range(0, lib_components.length)];
-+			string suffix = lib_suffixes[Random.int_range(0, lib_suffixes.length)];
-+
-+			return prefix + component + suffix;
-+		}
-+
-+		// 生成仿真的Socket名称
-+		public static string generate_realistic_socket_name() {
-+			string[] socket_prefixes = {
-+				"sys", "android", "native", "service", "core", "base"
-+			};
-+
-+			string[] socket_components = {
-+				"sock", "ipc", "ctrl", "mgmt", "svc", "handler",
-+				"bridge", "proxy", "daemon", "worker", "helper",
-+				"monitor", "tracker", "logger", "notifier"
-+			};
-+
-+			// 使用当前时间和进程ID作为随机种子
-+			uint32 seed = (uint32)(get_real_time() % 1000000);
-+			Random.set_seed(seed ^ (uint32)Posix.getpid());
-+
-+			string prefix = socket_prefixes[Random.int_range(0, socket_prefixes.length)];
-+			string component = socket_components[Random.int_range(0, socket_components.length)];
-+
-+			// 添加一些随机数字后缀，但保持看起来真实
-+			uint suffix_num = Random.int_range(1, 999);
-+
-+			return prefix + "_" + component + "_" + suffix_num.to_string();
-+		}
-+
-+		// 统一的增强模式检查方法
-+		public static bool is_enhanced_mode_enabled() {
-+			return is_mode_enabled();
-+		}
++		return prefix + "_" + identifier + "_" + number.to_string();
 +	}
 +
-+	/**
-+	 * Florida Enhanced: 内置反检测集成器
-+	 */
-+	public class AntiDetectionIntegrator {
-+		private static string[] detection_markers = {
-+			"frida", "gadget", "gum", "stalker", "interceptor",
-+			"hook", "inject", "patch", "trace", "debug"
++	// 统一的增强模式检查方法
++	public static bool is_enhanced_mode_enabled() {
++		return is_mode_enabled();
++	}
++}
++
++/**
++ * Florida Enhanced: 协议增强器
++ */
++public class FloridaProtocolEnhancer {
++	private static string[] protocol_prefixes = {
++		"proto", "msg", "cmd", "req", "resp", "data", "packet", "frame"
++	};
++
++	private static string[] protocol_types = {
++		"json", "binary", "text", "stream", "rpc", "api", "native", "custom"
++	};
++
++	// 检查是否启用增强模式
++	private static bool is_mode_enabled() {
++		// 优先检查功能开关，如果明确设置则以功能开关为准
++		string? protocol_mode = Environment.get_variable("FLORIDA_PROTOCOL_MODE");
++		if (protocol_mode != null) {
++			return protocol_mode != "0";
++		}
++
++		// 功能开关未设置，检查全局开关 (默认启用)
++		string? global_mode = Environment.get_variable("FLORIDA_MODE");
++		return (global_mode != "0");
++	}
++
++	// 生成混淆后的协议标识符
++	public static string obfuscate_protocol_identifier(string original) {
++		if (!is_mode_enabled()) {
++			return original;
++		}
++
++		// 使用时间戳和原始字符串哈希作为种子
++		uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
++		Random.set_seed(seed);
++
++		string prefix = protocol_prefixes[Random.int_range(0, protocol_prefixes.length)];
++		string type = protocol_types[Random.int_range(0, protocol_types.length)];
++		int version = Random.int_range(1, 10);
++
++		return prefix + "_" + type + "_v" + version.to_string();
++	}
++
++	// 统一的增强模式检查方法
++	public static bool is_enhanced_mode_enabled() {
++		return is_mode_enabled();
++	}
++}
++
++/**
++ * Florida Enhanced: 库名生成器
++ */
++public class FloridaLibNameGenerator {
++	private static string[] lib_prefixes = {
++		"lib", "android", "system", "native", "core", "runtime"
++	};
++
++	private static string[] lib_components = {
++		"utils", "service", "manager", "handler", "process", "thread",
++		"memory", "network", "security", "crypto", "media", "graphics"
++	};
++
++	private static string[] lib_suffixes = {
++		"", "_native", "_jni", "_impl", "_core", "_base"
++	};
++
++	// 检查是否启用增强模式
++	private static bool is_mode_enabled() {
++		// 优先检查功能开关，如果明确设置则以功能开关为准
++		string? file_mode = Environment.get_variable("FLORIDA_FILE_MODE");
++		if (file_mode != null) {
++			return file_mode != "0";
++		}
++
++		// 功能开关未设置，检查全局开关 (默认启用)
++		string? global_mode = Environment.get_variable("FLORIDA_MODE");
++		return (global_mode != "0");
++	}
++
++	// 生成仿真的库名
++	public static string generate_lib_name() {
++		if (!is_mode_enabled()) {
++			return "frida-agent";
++		}
++
++		// 使用时间戳作为种子
++		uint32 seed = (uint32)(get_real_time() % 1000000);
++		Random.set_seed(seed);
++
++		string prefix = lib_prefixes[Random.int_range(0, lib_prefixes.length)];
++		string component = lib_components[Random.int_range(0, lib_components.length)];
++		string suffix = lib_suffixes[Random.int_range(0, lib_suffixes.length)];
++
++		return prefix + component + suffix;
++	}
++
++	// 生成仿真的Socket名称
++	public static string generate_realistic_socket_name() {
++		string[] socket_prefixes = {
++			"sys", "android", "native", "service", "core", "base"
 +		};
 +
-+		private static string[] safe_alternatives = {
-+			"system", "native", "runtime", "service", "handler",
-+			"manager", "worker", "process", "thread", "monitor"
++		string[] socket_components = {
++			"sock", "ipc", "ctrl", "mgmt", "svc", "handler",
++			"bridge", "proxy", "daemon", "worker", "helper",
++			"monitor", "tracker", "logger", "notifier"
 +		};
 +
-+		// 检查是否启用增强模式
-+		private static bool is_mode_enabled() {
-+			// 优先检查功能开关，如果明确设置则以功能开关为准
-+			string? builtin_mode = Environment.get_variable("FLORIDA_BUILTIN_MODE");
-+			if (builtin_mode != null) {
-+				return builtin_mode != "0";
-+			}
++		// 使用当前时间和进程ID作为随机种子
++		uint32 seed = (uint32)(get_real_time() % 1000000);
++		Random.set_seed(seed ^ (uint32)Posix.getpid());
 +
-+			// 功能开关未设置，检查全局开关 (默认启用)
-+			string? global_mode = Environment.get_variable("FLORIDA_MODE");
-+			return (global_mode != "0");
++		string prefix = socket_prefixes[Random.int_range(0, socket_prefixes.length)];
++		string component = socket_components[Random.int_range(0, socket_components.length)];
++
++		// 添加一些随机数字后缀，但保持看起来真实
++		uint suffix_num = Random.int_range(1, 999);
++
++		return prefix + "_" + component + "_" + suffix_num.to_string();
++	}
++
++	// 统一的增强模式检查方法
++	public static bool is_enhanced_mode_enabled() {
++		return is_mode_enabled();
++	}
++}
++
++/**
++ * Florida Enhanced: 内置反检测集成器
++ */
++public class FloridaAntiDetectionIntegrator {
++	private static string[] detection_markers = {
++		"frida", "gadget", "gum", "stalker", "interceptor",
++		"hook", "inject", "patch", "trace", "debug"
++	};
++
++	private static string[] safe_alternatives = {
++		"system", "native", "runtime", "service", "handler",
++		"manager", "worker", "process", "thread", "monitor"
++	};
++
++	// 检查是否启用增强模式
++	private static bool is_mode_enabled() {
++		// 优先检查功能开关，如果明确设置则以功能开关为准
++		string? builtin_mode = Environment.get_variable("FLORIDA_BUILTIN_MODE");
++		if (builtin_mode != null) {
++			return builtin_mode != "0";
 +		}
 +
-+		// 替换检测标记
-+		public static string replace_detection_markers(string original) {
-+			if (!is_mode_enabled()) {
-+				return original;
-+			}
++		// 功能开关未设置，检查全局开关 (默认启用)
++		string? global_mode = Environment.get_variable("FLORIDA_MODE");
++		return (global_mode != "0");
++	}
 +
-+			string result = original;
-+			
-+			// 遍历检测标记并替换
-+			for (int i = 0; i < detection_markers.length; i++) {
-+				if (i < safe_alternatives.length) {
-+					result = result.replace(detection_markers[i], safe_alternatives[i]);
-+				}
-+			}
-+
-+			return result;
++	// 替换检测标记
++	public static string replace_detection_markers(string original) {
++		if (!is_mode_enabled()) {
++			return original;
 +		}
 +
-+		// 统一的增强模式检查方法
-+		public static bool is_enhanced_mode_enabled() {
-+			return is_mode_enabled();
++		string result = original;
++		
++		// 遍历检测标记并替换
++		for (int i = 0; i < detection_markers.length; i++) {
++			if (i < safe_alternatives.length) {
++				result = result.replace(detection_markers[i], safe_alternatives[i]);
++			}
 +		}
++
++		return result;
++	}
++
++	// 统一的增强模式检查方法
++	public static bool is_enhanced_mode_enabled() {
++		return is_mode_enabled();
 +	}
 +}
 \ No newline at end of file
