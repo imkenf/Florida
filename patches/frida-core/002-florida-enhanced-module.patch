@@ -4,9 +4,9 @@ Date: Thu, 12 Jun 2025 00:05:23 +0800
 Subject: [PATCH 002/004] Florida Enhanced: 增强功能模块集合文件
 
 ---
- src/florida-enhanced.vala | 328 ++++++++++++++++++++++++++++++++++++++
+ src/florida-enhanced.vala | 329 ++++++++++++++++++++++++++++++++++++++
  src/meson.build           |   1 +
- 2 files changed, 329 insertions(+)
+ 2 files changed, 330 insertions(+)
  create mode 100644 src/florida-enhanced.vala
 
 diff --git a/src/florida-enhanced.vala b/src/florida-enhanced.vala
@@ -14,7 +14,7 @@ new file mode 100644
 index 0000000..bca5866
 --- /dev/null
 +++ b/src/florida-enhanced.vala
-@@ -0,0 +1,328 @@
+@@ -0,0 +1,329 @@
 +/**
 + * Florida Enhanced: Frida反检测增强模块
 + *
@@ -357,6 +357,7 @@ index 0000000..bca5866
 +		return is_mode_enabled();
 +	}
 +}
++
 diff --git a/src/meson.build b/src/meson.build
 index 34a212a..a4456a7 100644
 --- a/src/meson.build
